@@ -228,6 +228,17 @@ final class AdditionalEndpointsTest extends TestCase {
         $this->scenario('hpos-metabox-and-workflow-forms', function (): array {
             global $wpdb;
             self::assertTrue(wc_get_container()->get(\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController::class)->custom_orders_table_usage_is_enabled(), 'HPOS must be active, not silently skipped.');
+            // Initialize the real admin bootstrap before creating the isolated order.
+            [$initialCookie] = CandidateHttp::auth($this->user('admin'), 'unused-admin-bootstrap');
+            for ($attempt = 0; $attempt < 2; ++$attempt) {
+                $initial = Task4EndpointHttp::get('wp-admin/index.php', [], $initialCookie);
+                if ($initial['status'] === 200) { break; }
+                self::assertSame(302, $initial['status']);
+                $location = Task4EndpointHttp::header($initial, 'Location');
+                self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+                self::assertStringStartsWith('/wp-admin/', (string) parse_url($location, PHP_URL_PATH));
+            }
+            self::assertSame(200, Task4EndpointHttp::get('wp-admin/index.php', [], $initialCookie)['status']);
             $order = wc_create_order(['customer_id' => $this->user('buyer_1')]);
             $id = $order->get_id(); $admin = $this->user('admin');
             $store = new WorkflowStore($wpdb, CandidateFixture::repositories()['audit']);
