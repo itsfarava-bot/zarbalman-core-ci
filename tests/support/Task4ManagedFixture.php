@@ -272,7 +272,7 @@ final class Task4ManagedFixture {
         global $wpdb;
         $tables = (new Schema($wpdb))->tables();
         $tables = array_merge($tables, [$wpdb->posts, $wpdb->postmeta, $wpdb->prefix . 'woocommerce_order_items', $wpdb->prefix . 'woocommerce_order_itemmeta']);
-        foreach (['wc_orders', 'wc_order_addresses', 'wc_order_operational_data', 'wc_orders_meta', 'dokan_vendor_balance'] as $suffix) {
+        foreach (['wc_orders', 'wc_order_addresses', 'wc_order_operational_data', 'wc_orders_meta', 'dokan_vendor_balance', 'dokan_orders'] as $suffix) {
             $table = $wpdb->prefix . $suffix;
             if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))) === $table) { $tables[] = $table; }
         }

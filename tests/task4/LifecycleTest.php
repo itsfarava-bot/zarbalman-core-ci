@@ -32,6 +32,42 @@ final class LifecycleTest extends TestCase {
             self::assertFalse(wp_next_scheduled($hook,[91234]),'Cron remains: '.$hook);
         }
     }
+    public function test_reactivation_processes_an_overdue_one_time_deadline_in_one_sweep(): void {
+        require_once __DIR__ . '/../support/CandidateFixture.php';
+        require_once __DIR__ . '/../support/HttpClient.php';
+        require_once __DIR__ . '/../support/Task4EndpointHttp.php';
+        global $wpdb;
+        $schema = new Schema($wpdb); $repos = CandidateFixture::repositories();
+        $order = wc_create_order(); self::assertInstanceOf(WC_Order::class, $order); $id = $order->get_id();
+        $now = current_time('mysql', true); $future = gmdate('Y-m-d H:i:s', time() + 3600);
+        self::assertSame(1, $wpdb->insert($schema->workflows_table(), ['order_id' => $id, 'current_state' => 'delivered', 'version' => 0, 'is_paused' => 0, 'delivered_at_gmt' => $now, 'buyer_deadline_gmt' => $future, 'created_at_gmt' => $now, 'updated_at_gmt' => $now]));
+        $hook = \Zarbalman\Core\Infrastructure\DeadlineScheduler::BUYER_HOOK;
+        self::assertGreaterThan(0, as_schedule_single_action(time() + 3600, $hook, [$id], Scheduler::GROUP));
+        $run = static function (string $operation): void {
+            $process = proc_open(['wp', 'plugin', $operation, 'zarbalman-core', '--path=' . getenv('ZBM_TEST_WP_ROOT'), '--no-color'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            self::assertIsResource($process); $output = stream_get_contents($pipes[1]); $errors = stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]);
+            self::assertSame(0, proc_close($process), $output . $errors);
+        };
+        $run('deactivate');
+        self::assertFalse(as_has_scheduled_action($hook, [$id], Scheduler::GROUP));
+        // Persist an elapsed clock boundary while inactive, without changing the system clock.
+        self::assertSame(1, $wpdb->update($schema->workflows_table(), ['buyer_deadline_gmt' => gmdate('Y-m-d H:i:s', time() - 60)], ['order_id' => $id]));
+        $store = new \Zarbalman\Core\Infrastructure\WorkflowStore($wpdb, $repos['audit']);
+        $before = $store->snapshot($id); self::assertSame('delivered', $before['state']);
+        $finance = CandidateFixture::financialSnapshot();
+        $run('activate');
+        $admin = get_user_by('login', 'zbm_test_admin'); self::assertInstanceOf(WP_User::class, $admin);
+        [$cookie] = CandidateHttp::auth((int) $admin->ID, 'unused-sweep-read');
+        $http = Task4EndpointHttp::get('task4-endpoint-harness.php', ['view' => 'deadline-sweep'], $cookie);
+        self::assertSame(200, $http['status']); $result = json_decode($http['body'], true, 32, JSON_THROW_ON_ERROR);
+        file_put_contents(__DIR__ . '/../../evidence/task4-reactivation.json', wp_json_encode(['before' => $before, 'after' => $store->snapshot($id), 'sweep' => $result]));
+        self::assertTrue($result['registered']); self::assertTrue($result['scheduled']);
+        self::assertSame('admin_review', $store->snapshot($id)['state']); self::assertSame($before['version'] + 1, $store->snapshot($id)['version']);
+        self::assertSame($finance, CandidateFixture::financialSnapshot());
+        $events = array_values(array_filter($repos['audit']->for_order($id, 20), static fn($event) => $event->event_key === 'workflow_transitioned' && $event->to_state === 'admin_review'));
+        self::assertCount(1, $events); self::assertSame('system', $events[0]->actor_type); self::assertSame(0, (int) $events[0]->actor_user_id);
+    }
+
     public function test_explicit_uninstall_cannot_drop_partial_schema_or_encryption_keys(): void {
         global $wpdb;
         $file=var_export(__DIR__.'/../../plugin/uninstall.php',true);

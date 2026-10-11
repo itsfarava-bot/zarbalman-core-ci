@@ -78,6 +78,9 @@ final class ManagedHttpMatrixTest extends TestCase {
             $beforeCase = $positive->case();
             $beforeSnapshot = Task4ManagedFixture::snapshot();
             $beforeAudit = $this->auditCount($positive->id);
+            $beforeOrder = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id=%d', $wpdb->prefix . 'wc_orders', $positive->orderId), ARRAY_A);
+            $beforeCommission = $wpdb->get_results($wpdb->prepare('SELECT * FROM %i WHERE order_id=%d ORDER BY id', $wpdb->prefix . 'dokan_orders', $positive->orderId), ARRAY_A);
+            self::assertSame('', $wpdb->last_error);
             $http = CandidateHttp::post('wp-admin/' . $transport, $fields, $cookie);
             if ($positive->blockedCode !== null) {
                 $observed = $this->assertDomainRejection($http, $transport, $users[$owner], $owner === 'admin', $positive->blockedCode, (string) $positive->blockedMessage);
@@ -91,6 +94,19 @@ final class ManagedHttpMatrixTest extends TestCase {
                 self::assertNotSame($beforeSnapshot, Task4ManagedFixture::snapshot());
                 $positive->validate();
                 $effects = $this->assertEffects($positive, $operation, $beforeCase, $fields);
+                if ($operation === 'manual_credit_seller') {
+                    self::assertIsArray($beforeOrder);
+                    self::assertSame($beforeOrder, $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id=%d', $wpdb->prefix . 'wc_orders', $positive->orderId), ARRAY_A));
+                    self::assertSame($beforeCommission, $wpdb->get_results($wpdb->prepare('SELECT * FROM %i WHERE order_id=%d ORDER BY id', $wpdb->prefix . 'dokan_orders', $positive->orderId), ARRAY_A));
+                    $replaySnapshot = Task4ManagedFixture::snapshot(); $replayCase = $positive->case();
+                    $replay = CandidateHttp::post('wp-admin/' . $transport, $fields, $cookie);
+                    $this->assertAccepted($replay, $transport, $users[$owner]);
+                    self::assertSame($replayCase, $positive->case()); self::assertSame($replaySnapshot, Task4ManagedFixture::snapshot());
+                    self::assertSame($beforeCommission, $wpdb->get_results($wpdb->prepare('SELECT * FROM %i WHERE order_id=%d ORDER BY id', $wpdb->prefix . 'dokan_orders', $positive->orderId), ARRAY_A));
+                    $events = array_filter(array_map(static fn($line) => json_decode($line, true), file(__DIR__ . '/../../evidence/task4-http-events.jsonl', FILE_IGNORE_NEW_LINES)), static fn($event) => ($event['request_id'] ?? 0) === $positive->id);
+                    self::assertCount(0, array_filter($events, static fn($event) => in_array($event['event'] ?? '', ['mail', 'order_status_changed'], true)));
+                    $effects['replay_unchanged'] = true; $effects['woo_order_and_commission_unchanged'] = true;
+                }
                 self::$evidence[$key]['positive'] = ['result' => $operation === 'spec4_reverify' ? 'accepted-durable-review-provider-unverified' : 'accepted-durable-effects', 'http' => $http['status'], 'request_id' => $positive->id, 'before_version' => $beforeCase['version'], 'after_version' => $afterCase['version'], 'effects' => $effects, 'limitation' => $positive->limitation];
             }
             // Separate, independently proved pre-action state keeps object/accept role derivation eligible.
@@ -207,7 +223,11 @@ final class ManagedHttpMatrixTest extends TestCase {
                 $credit = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE order_id=%d', $schema->dokan_credit_mirrors_table(), $fixture->orderId), ARRAY_A);
                 self::assertIsArray($credit); self::assertSame('credited', $credit['status']); self::assertSame(900, (int) $credit['amount_toman']);
                 $native = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id=%d', $wpdb->prefix . 'dokan_vendor_balance', (int) $credit['dokan_balance_id']), ARRAY_A);
-                self::assertIsArray($native); self::assertSame($fixture->users['vendor_1'], (int) $native['vendor_id']); self::assertSame($fixture->orderId, (int) $native['trn_id']); self::assertSame('approved', $native['status']); break;
+                self::assertIsArray($native); self::assertSame($fixture->users['vendor_1'], (int) $native['vendor_id']); self::assertSame($fixture->orderId, (int) $native['trn_id']); self::assertContains('wc-completed', dokan_withdraw_get_active_order_status());
+                self::assertSame('wc-completed', $native['status']); self::assertSame(900.0, (float) $native['debit']); self::assertSame(0.0, (float) $native['credit']);
+                self::assertSame('completed', $case['state']); self::assertNotNull($data['final']['locked_at']); self::assertNotNull($data['delivery']['delivered_at']);
+                self::assertSame(1000, $data['final']['total']); self::assertSame(100, $data['final']['commission']); self::assertSame(900, $data['final']['net']);
+                self::assertSame($before['data']['funds'], $data['funds']); break;
             case 'spec4_contact': self::assertSame('warning', $data['spec4']['substate']); self::assertCount(1, $data['spec4']['contact_history']); self::assertNotNull($data['spec4']['warning_deadline_gmt']); break;
             case 'spec4_confirm_return': self::assertSame('return_confirmed', $data['spec4']['substate']); self::assertSame('nonpayment_return', $data['spec4']['trigger']); self::assertCount(1, $data['spec4']['return_evidence_ids']); self::assertSame('return_review', $case['state']); break;
             case 'spec4_create_refund':

@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
 		</div>
 		<div class="zbm-dashboard-head-actions">
 			<?php if ( ! empty( $requests ) ) : ?><span class="zbm-dashboard-count"><?php echo esc_html( number_format_i18n( count( $requests ) ) ); ?> <?php esc_html_e( 'درخواست', 'zarbalman-core' ); ?></span><?php endif; ?>
-			<a class="zbm-back-link zbm-back-link-secondary zbm-guide-link" href="<?php echo esc_url( 'https://example.invalid/buyer-and-seller-guide/' ); ?>"><?php esc_html_e( 'راهنمای خریدار و فروشنده', 'zarbalman-core' ); ?> <span aria-hidden="true">?</span></a>
+			<a class="zbm-back-link zbm-back-link-secondary zbm-guide-link" href="<?php echo esc_url( 'https://zarbalman.ir/buyer-and-seller-guide/' ); ?>"><?php esc_html_e( 'راهنمای خریدار و فروشنده', 'zarbalman-core' ); ?> <span aria-hidden="true">?</span></a>
 			<a class="dokan-btn dokan-btn-theme zbm-back-link zbm-back-link-dashboard" href="<?php echo esc_url( $dashboard_url ); ?>"><span aria-hidden="true">←</span> <?php esc_html_e( 'بازگشت به داشبورد فروشنده', 'zarbalman-core' ); ?></a>
 		</div>
 	</header>

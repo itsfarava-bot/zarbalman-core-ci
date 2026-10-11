@@ -26,6 +26,13 @@ if ($view === 'reports') {
         http_response_code(500);
         echo wp_json_encode(['sandbox_error'=>get_class($error),'message'=>$error->getMessage(),'file'=>basename($error->getFile()),'line'=>$error->getLine()]);
     }
+} elseif ($view === 'deadline-sweep') {
+    if (!current_user_can('manage_options')) { wp_send_json(['code' => 'sandbox_admin_required'], 403); }
+    $hook = Zarbalman\Core\Infrastructure\DeadlineScheduler::RECOVERY_HOOK;
+    $registered = has_action($hook);
+    $scheduled = as_has_scheduled_action($hook, [], Zarbalman\Core\Infrastructure\Scheduler::GROUP);
+    do_action($hook);
+    wp_send_json(['registered' => $registered, 'scheduled' => $scheduled]);
 } elseif ($view === 'login-return') {
     // The actual registered login filters consume the HTTP cookie.
     $fallback = home_url('/safe-login-fallback/');
