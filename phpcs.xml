@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<ruleset name="Zarbalman baseline">
+  <description>Report existing production style issues without changing production code.</description>
+  <file>plugin</file>
+  <arg name="extensions" value="php"/>
+  <config name="testVersion" value="8.2"/>
+  <rule ref="WordPress"/>
+  <rule ref="PHPCompatibilityWP"/>
+</ruleset>
+

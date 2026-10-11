@@ -1,0 +1,54 @@
+<?php
+defined( 'ABSPATH' ) || exit;
+?>
+<div class="zbm-managed-admin">
+	<h4><?php esc_html_e( 'کنترل مدیریت با سابقهٔ حسابرسی', 'zarbalman-core' ); ?></h4>
+	<?php if ( $is_operations_admin && ! $paused && ! $delivery_recorded && ! $final_locked && ( in_array( $state, \Zarbalman\Core\Domain\ManagedFlow\OperationsData::PRE_DELIVERY, true ) || ( \Zarbalman\Core\Domain\ManagedFlow\FlowState::ADMIN_REVIEW === $state && ! empty( $flow['window']['overdue_at'] ) ) ) ) : ?>
+		<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form zbm-managed-inline-form"><?php $command_fields( 'flow_extend_delivery' ); ?><label><?php esc_html_e( 'تمدید بازهٔ تحویل (دقیقه)', 'zarbalman-core' ); ?><input type="number" name="minutes" min="1" max="10080" required></label><label><?php esc_html_e( 'نتیجهٔ هماهنگی و دلیل تمدید', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'ثبت بازهٔ جدید و ادامهٔ تحویل', 'zarbalman-core' ); ?></button><p class="zbm-managed-muted"><?php esc_html_e( 'پایان بازه از زمان دیرترِ «اکنون» یا «پایان قبلی» تمدید می‌شود. اگر شروع قبلی گذشته باشد، شروع جدید اکنون است. سابقه و دلیل حفظ می‌شود.', 'zarbalman-core' ); ?></p></form>
+	<?php endif; ?>
+	<?php if ( $is_operations_admin && ! $paused && in_array( $state, array( \Zarbalman\Core\Domain\ManagedFlow\FlowState::PREPARING, \Zarbalman\Core\Domain\ManagedFlow\FlowState::READY_FOR_DELIVERY ), true ) && 0 === (int) ( $delivery['generation'] ?? 0 ) && $any_vendor_weight_available ) : ?>
+		<details class="zbm-managed-disclosure"><summary><?php esc_html_e( 'اصلاح وزن و عکس آماده‌سازی', 'zarbalman-core' ); ?></summary><form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_reopen_preparation' ); ?><p><?php esc_html_e( 'وزن و عکس قبلی بایگانی می‌شود و فروشنده اجازهٔ ثبت جایگزین می‌گیرد. مدرکی حذف نمی‌شود.', 'zarbalman-core' ); ?></p><label><?php esc_html_e( 'دلیل اجباری', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'بازگشایی آماده‌سازی', 'zarbalman-core' ); ?></button></form></details>
+	<?php endif; ?>
+	<?php if ( $is_operations_admin && ! in_array( $state, array( \Zarbalman\Core\Domain\ManagedFlow\FlowState::COMPLETED, \Zarbalman\Core\Domain\ManagedFlow\FlowState::CANCELLED ), true ) ) : ?>
+		<div class="zbm-managed-actions">
+			<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( $paused ? 'flow_resume' : 'flow_pause' ); ?><label><?php esc_html_e( 'دلیل اجباری', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php echo $paused ? esc_html__( 'ادامه با زمان باقی‌مانده', 'zarbalman-core' ) : esc_html__( 'توقف دقیق مهلت', 'zarbalman-core' ); ?></button></form>
+			<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_note' ); ?><label><?php esc_html_e( 'یادداشت', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><label><select name="visibility"><option value="private"><?php esc_html_e( 'خصوصی مدیریت', 'zarbalman-core' ); ?></option><option value="public"><?php esc_html_e( 'قابل مشاهده برای طرفین', 'zarbalman-core' ); ?></option></select></label><button class="button" type="submit"><?php esc_html_e( 'ثبت یادداشت', 'zarbalman-core' ); ?></button></form>
+			<?php if ( ! $operations_only && ! isset( $case['data']['spec4'] ) ) : ?><form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_refer_return' ); ?><label><?php esc_html_e( 'دلیل ارجاع', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'ارجاع به بررسی بازگشت', 'zarbalman-core' ); ?></button></form><?php endif; ?>
+		</div>
+	<?php endif; ?>
+
+	<?php if ( $is_operations_admin && in_array( $state, array( \Zarbalman\Core\Domain\ManagedFlow\FlowState::BUYER_REVIEW, \Zarbalman\Core\Domain\ManagedFlow\FlowState::SELLER_REVIEW ), true ) && ! $paused ) : ?>
+		<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form zbm-managed-inline-form"><?php $command_fields( 'flow_extend' ); ?><label><?php esc_html_e( 'افزایش مهلت (دقیقه)', 'zarbalman-core' ); ?><input type="number" name="minutes" min="1" max="10080" required></label><label><?php esc_html_e( 'دلیل', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'افزایش مهلت', 'zarbalman-core' ); ?></button></form>
+	<?php endif; ?>
+
+	<?php if ( $is_operations_admin && \Zarbalman\Core\Domain\ManagedFlow\FlowState::ADMIN_REVIEW === $state && ! $paused ) : ?>
+		<div class="zbm-managed-actions zbm-managed-actions-three">
+			<?php if ( $delivery_recorded && ! $final_locked ) : ?>
+				<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_reopen_buyer' ); ?><label><?php esc_html_e( 'دلیل بازگشایی', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'بازگشایی ۲ ساعته خریدار', 'zarbalman-core' ); ?></button></form>
+				<?php if ( $buyer_weight_available ) : ?><form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_reopen_seller' ); ?><label><?php esc_html_e( 'دلیل بازگشایی', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'بازگشایی ۳۰ دقیقه‌ای فروشنده', 'zarbalman-core' ); ?></button></form><?php endif; ?>
+				<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_set_final_weight' ); ?><label><?php esc_html_e( 'وزن نهایی مدیر (کیلوگرم)', 'zarbalman-core' ); ?><input type="text" name="weight" inputmode="decimal" pattern="[0-9۰-۹٠-٩]+([٫.][0-9۰-۹٠-٩])?" maxlength="30" required></label><label class="zbm-managed-check"><input type="checkbox" name="acknowledged" value="1"> <?php esc_html_e( 'اختلاف بیش از ۲۵٪ را آگاهانه بررسی کردم.', 'zarbalman-core' ); ?></label><label><?php esc_html_e( 'دلیل تصمیم', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button button-primary" type="submit"><?php esc_html_e( 'قفل وزن نهایی', 'zarbalman-core' ); ?></button></form>
+			<?php elseif ( $can_recover_delivery ) : ?>
+				<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_reissue_code' ); ?><input type="hidden" name="resume_state" value="<?php echo esc_attr( $expected_resume_state ); ?>"><p><?php echo esc_html( \Zarbalman\Core\Domain\ManagedFlow\FlowState::READY_FOR_PICKUP === $expected_resume_state ? __( 'پس از صدور کد، پرونده به مرحلهٔ دریافت حضوری برمی‌گردد.', 'zarbalman-core' ) : __( 'پس از صدور کد، پرونده به مرحلهٔ در مسیر تحویل برمی‌گردد.', 'zarbalman-core' ) ); ?></p><label><?php esc_html_e( 'دلیل', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'باطل‌کردن کد قبلی و صدور کد جدید', 'zarbalman-core' ); ?></button></form>
+				<p class="zbm-managed-alert is-info"><?php esc_html_e( 'صدور مجدد، کد قبلی را باطل می‌کند. ادامهٔ تحویل همچنان به ثبت کد جدید خریدار توسط فروشنده نیاز دارد.', 'zarbalman-core' ); ?></p>
+			<?php elseif ( $final_locked ) : ?>
+				<div class="zbm-managed-alert is-warning" role="status"><?php esc_html_e( 'وزن و مبلغ نهایی قفل شده‌اند؛ این پرونده برای تصمیم مالی/بازگشت در مدیریت باقی می‌ماند و بازگشایی وزن مجاز نیست.', 'zarbalman-core' ); ?></div>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+	<?php if ( $is_operations_admin && ! empty( $flow['notes']['private'] ) ) : ?>
+	<details class="zbm-managed-disclosure"><summary><?php esc_html_e( 'دلایل و یادداشت‌های داخلی مدیریت', 'zarbalman-core' ); ?></summary>
+		<?php foreach ( array_reverse( $flow['notes']['private'] ) as $note ) : ?><article class="zbm-managed-history"><strong><?php echo esc_html( $format_time( $note['at_gmt'] ) . ' · #' . $note['actor_id'] ); ?></strong><p><?php echo esc_html( $note['text'] ); ?></p></article><?php endforeach; ?>
+	</details><?php endif; ?>
+	<?php if ( $is_operations_admin && ! empty( $flow['window_history'] ) ) : ?>
+	<details class="zbm-managed-disclosure"><summary><?php esc_html_e( 'سابقهٔ تمدید تحویل', 'zarbalman-core' ); ?></summary>
+		<?php foreach ( array_reverse( $flow['window_history'] ) as $entry ) : ?><article class="zbm-managed-history"><strong><?php echo esc_html( $format_time( $entry['at_gmt'] ) . ' · #' . $entry['actor_id'] ); ?></strong><p><?php echo esc_html( $format_time( $entry['start_gmt'] ) . ' — ' . $format_time( $entry['end_gmt'] ) ); ?></p><p><?php echo esc_html( $entry['reason'] ); ?></p></article><?php endforeach; ?>
+	</details><?php endif; ?>
+
+	<?php if ( $is_operations_admin && ! isset( $case['data']['spec4'] ) && \Zarbalman\Core\Domain\ManagedFlow\FlowState::RETURN_REVIEW === $state && ! $paused ) : ?>
+		<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form"><?php $command_fields( 'flow_cancel' ); ?><label><?php esc_html_e( 'دلیل نهایی لغو', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button" type="submit"><?php esc_html_e( 'لغو پرونده بدون بازپرداخت خودکار', 'zarbalman-core' ); ?></button></form>
+	<?php endif; ?>
+
+	<?php if ( $is_finance_admin && empty( $finance_view ) && \Zarbalman\Core\Domain\ManagedFlow\FlowState::COMPLETED === $state && 'pending' === ( $final['settlement'] ?? '' ) && ! $sync_pending && ! $paused ) : ?>
+		<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="zbm-managed-form" data-confirm="<?php esc_attr_e( 'مانده کامل دریافت شده و می‌خواهید اعتبار خالص فروشنده را دقیقاً یک‌بار ثبت کنید؟', 'zarbalman-core' ); ?>"><?php $command_fields( 'manual_credit_seller' ); ?><h4><?php esc_html_e( 'شارژ جداگانهٔ فروشنده', 'zarbalman-core' ); ?></h4><p><?php echo esc_html( sprintf( __( 'کمیسیون: %1$s — خالص فروشنده: %2$s', 'zarbalman-core' ), $money( $final['commission'] ?? null ), $money( $final['net'] ?? null ) ) ); ?></p><label><?php esc_html_e( 'دلیل/مرجع اجباری', 'zarbalman-core' ); ?><textarea name="reason" maxlength="1000" required></textarea></label><button class="button button-primary" type="submit"><?php esc_html_e( 'ثبت اعتبار خالص در Dokan', 'zarbalman-core' ); ?></button></form>
+	<?php endif; ?>
+</div>

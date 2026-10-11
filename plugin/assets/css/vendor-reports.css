@@ -1,0 +1,828 @@
+/* Dokan's shared dashboard wrapper is horizontal. The report root is attached
+ * directly to body, so reset that layout on this page only. */
+body.dokan-dashboard .zbm-dashboard.zbm-vendor-reports.dokan-dashboard-wrap {
+	display: block !important;
+}
+
+.zbm-vendor-reports {
+	direction: rtl;
+	--zbm-brand: #00af23;
+	--zbm-action-green: #087521;
+	--zbm-action-green-hover: #065c1b;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	margin: 24px 0;
+	padding: 20px;
+	border: 1px solid #e2e8f0;
+	border-radius: 16px;
+	background: #fff;
+	color: #1f2937;
+}
+
+.zbm-vendor-reports *,
+.zbm-vendor-reports *::before,
+.zbm-vendor-reports *::after {
+	box-sizing: border-box;
+}
+
+.zbm-vendor-reports .zbm-reports-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+	margin-bottom: 22px;
+	padding-bottom: 18px;
+	border-bottom: 1px solid #eef2f7;
+}
+
+.zbm-vendor-reports .zbm-reports-heading {
+	min-width: 0;
+}
+
+.zbm-vendor-reports .zbm-reports-kicker {
+	display: inline-block;
+	margin-bottom: 6px;
+	color: #0f766e;
+	font-size: .88rem;
+	font-weight: 800;
+}
+
+.zbm-vendor-reports .zbm-reports-heading h2 {
+	margin: 0 0 7px;
+	color: #0f172a;
+	font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+}
+
+.zbm-vendor-reports .zbm-reports-heading p,
+.zbm-vendor-reports .zbm-reports-help,
+.zbm-vendor-reports .zbm-reports-section-head p {
+	margin: 0;
+	color: #64748b;
+	line-height: 1.85;
+}
+
+.zbm-vendor-reports .zbm-reports-back,
+.zbm-vendor-reports .zbm-reports-apply {
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 46px;
+	padding: 10px 16px !important;
+	border: 1px solid var(--zbm-brand) !important;
+	border-radius: 10px !important;
+	background: var(--zbm-brand) !important;
+	background-color: var(--zbm-brand) !important;
+	background-image: none !important;
+	color: #fff !important;
+	font-size: 1rem;
+	font-weight: 700;
+	text-decoration: none;
+	white-space: normal;
+	box-shadow: none !important;
+}
+
+.zbm-vendor-reports .zbm-reports-back:hover,
+.zbm-vendor-reports .zbm-reports-back:focus-visible,
+.zbm-vendor-reports .zbm-reports-apply:hover,
+.zbm-vendor-reports .zbm-reports-apply:focus-visible {
+	border-color: var(--zbm-action-green-hover) !important;
+	background: var(--zbm-action-green-hover) !important;
+	color: #fff !important;
+}
+
+.zbm-vendor-reports .zbm-reports-back:focus-visible,
+.zbm-vendor-reports .zbm-reports-apply:focus-visible,
+.zbm-vendor-reports .zbm-reports-clear:focus-visible,
+.zbm-vendor-reports input:focus-visible,
+.zbm-vendor-reports .zbm-reports-table-scroll:focus-visible {
+	outline: 3px solid rgba(8, 117, 33, .28);
+	outline-offset: 2px;
+}
+
+.zbm-vendor-reports .zbm-reports-filter {
+	margin: 0 0 20px;
+	padding: 18px;
+	border: 1px solid #e2e8f0;
+	border-radius: 13px;
+	background: #f8fafc;
+}
+
+.zbm-vendor-reports .zbm-reports-filter h3,
+.zbm-vendor-reports .zbm-reports-section-head h3 {
+	margin: 0 0 6px;
+	color: #0f172a;
+	font-size: 1.13rem;
+}
+
+.zbm-vendor-reports .zbm-reports-help {
+	margin-bottom: 14px;
+	font-size: .98rem;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: end;
+	gap: 12px;
+	margin: 0;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-form label {
+	display: grid;
+	min-width: 0;
+	gap: 7px;
+	color: #334155;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-form input {
+	width: 100%;
+	min-width: 0;
+	min-height: 48px;
+	padding: 10px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 9px;
+	background: #fff;
+	color: #1f2937;
+	font: inherit;
+	font-weight: 500;
+}
+
+.zbm-vendor-reports .zbm-reports-date-format {
+	color: #64748b;
+	font-size: .92rem;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+}
+
+.zbm-vendor-reports .zbm-reports-clear {
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	min-height: 46px;
+	max-width: 100%;
+	padding: 10px 15px !important;
+	border-radius: 10px !important;
+	font-size: 1rem;
+	font-weight: 700;
+	white-space: normal;
+}
+
+.zbm-vendor-reports .zbm-reports-alert {
+	margin: 12px 0;
+	padding: 13px 15px;
+	border: 1px solid #fed7aa;
+	border-radius: 10px;
+	background: #fff7ed;
+	color: #9a3412;
+	line-height: 1.8;
+}
+
+.zbm-vendor-reports .zbm-reports-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+	margin: 0 0 22px;
+}
+
+.zbm-vendor-reports .zbm-report-card {
+	display: flex;
+	min-width: 0;
+	min-height: 150px;
+	flex-direction: column;
+	gap: 9px;
+	padding: 18px;
+	border: 1px solid #e2e8f0;
+	border-radius: 13px;
+	background: #fff;
+}
+
+.zbm-vendor-reports .zbm-report-card h3 {
+	margin: 0;
+	color: #475569;
+	font-size: 1rem;
+	line-height: 1.6;
+}
+
+.zbm-vendor-reports .zbm-report-card strong {
+	color: #0f172a;
+	font-size: clamp(1.4rem, 2vw, 1.8rem);
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.zbm-vendor-reports .zbm-report-card p {
+	margin: auto 0 0;
+	color: #64748b;
+	font-size: .92rem;
+	line-height: 1.8;
+}
+
+.zbm-vendor-reports .zbm-report-card-sales {
+	border-color: #bbf7d0;
+	background: #f0fdf4;
+}
+
+.zbm-vendor-reports .zbm-report-card-sales strong {
+	color: #166534;
+	font-size: clamp(1.15rem, 1.7vw, 1.5rem);
+}
+
+.zbm-vendor-reports .zbm-reports-daily {
+	min-width: 0;
+	padding-top: 4px;
+}
+
+.zbm-vendor-reports .zbm-reports-section-head {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.zbm-vendor-reports .zbm-reports-section-head p {
+	font-size: .96rem;
+}
+
+.zbm-vendor-reports .zbm-reports-scroll-hint {
+	display: none;
+	flex: 0 0 auto;
+	color: #64748b;
+	font-size: .88rem;
+}
+
+.zbm-vendor-reports .zbm-reports-table-scroll {
+	width: 100%;
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid #e2e8f0;
+	border-radius: 11px;
+	overscroll-behavior-inline: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+.zbm-vendor-reports .zbm-reports-table {
+	width: 100%;
+	min-width: 590px;
+	border-collapse: collapse;
+	background: #fff;
+	font-size: 1rem;
+}
+
+.zbm-vendor-reports .zbm-reports-table caption {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.zbm-vendor-reports .zbm-reports-table th,
+.zbm-vendor-reports .zbm-reports-table td {
+	padding: 13px 14px;
+	border-bottom: 1px solid #eef2f7;
+	text-align: right;
+	vertical-align: middle;
+}
+
+.zbm-vendor-reports .zbm-reports-table thead th {
+	background: #f8fafc;
+	color: #334155;
+	font-weight: 800;
+}
+
+.zbm-vendor-reports .zbm-reports-table tbody th {
+	color: #1f2937;
+	font-weight: 700;
+}
+
+.zbm-vendor-reports .zbm-reports-table tbody tr:last-child th,
+.zbm-vendor-reports .zbm-reports-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.zbm-vendor-reports .zbm-reports-table td {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.zbm-vendor-reports .zbm-reports-empty {
+	margin: 0;
+	padding: 15px;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	background: #f8fafc;
+	color: #475569;
+	line-height: 1.8;
+}
+
+@media (max-width: 767px) {
+	.zbm-vendor-reports {
+		margin: 14px 0;
+		padding: 15px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-head {
+		align-items: stretch;
+		flex-direction: column;
+		gap: 13px;
+		margin-bottom: 17px;
+		padding-bottom: 15px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-back {
+		width: 100%;
+	}
+
+	.zbm-vendor-reports .zbm-reports-filter {
+		padding: 14px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-filter-form,
+	.zbm-vendor-reports .zbm-reports-summary {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.zbm-vendor-reports .zbm-reports-filter-actions {
+		flex-direction: column;
+	}
+
+	.zbm-vendor-reports .zbm-reports-apply,
+	.zbm-vendor-reports .zbm-reports-clear {
+		width: 100%;
+	}
+
+	.zbm-vendor-reports .zbm-report-card {
+		min-height: 0;
+	}
+
+	.zbm-vendor-reports .zbm-reports-section-head {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.zbm-vendor-reports .zbm-reports-scroll-hint {
+		display: inline-block;
+	}
+}
+
+/* Version 1.0.4: compact Search Console-style report controls. */
+.zbm-vendor-reports {
+	--zbm-report-purple: #6d28d9;
+	--zbm-report-indigo: #4f46e5;
+	--zbm-report-lilac: #a855f7;
+	--zbm-report-ink: #1e1b4b;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-form {
+	position: relative;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-actions {
+	grid-column: 1 / -1;
+	justify-content: flex-start;
+	direction: rtl;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-error {
+	grid-column: 1 / -1;
+	margin: 0;
+	padding: 10px 12px;
+	border: 1px solid #fecaca;
+	border-radius: 9px;
+	background: #fff1f2;
+	color: #be123c;
+	font-size: .92rem;
+	line-height: 1.8;
+}
+
+.zbm-vendor-reports .zbm-reports-filter-error[hidden] {
+	display: none !important;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-date-wrap {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	min-width: 0;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-date-wrap .zbm-vendor-report-jalali-date {
+	flex: 1 1 auto;
+	min-width: 0;
+	direction: ltr;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 46px;
+	width: 46px;
+	min-height: 48px;
+	border: 1px solid #cbd5e1;
+	border-radius: 9px;
+	background: #fff;
+	color: var(--zbm-brand);
+	font-size: 1.2rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-trigger:hover,
+.zbm-vendor-reports .zbm-vendor-report-jalali-trigger:focus-visible {
+	border-color: var(--zbm-brand);
+	background: rgba(0, 175, 35, .08);
+	color: var(--zbm-action-green);
+	outline: 3px solid rgba(0, 175, 35, .18);
+	outline-offset: 1px;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-picker[hidden] {
+	display: none !important;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-picker {
+	position: absolute;
+	z-index: 100003;
+	top: calc(100% + 8px);
+	right: 0;
+	width: min(320px, calc(100vw - 48px));
+	padding: 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 14px;
+	background: #fff;
+	box-shadow: 0 18px 45px rgba(15, 23, 42, .20);
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-picker-header,
+.zbm-vendor-reports .zbm-vendor-report-jalali-weekdays,
+.zbm-vendor-reports .zbm-vendor-report-jalali-days {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	gap: 5px;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-picker-header {
+	grid-template-columns: 34px 1fr 34px;
+	align-items: center;
+	margin-bottom: 10px;
+	text-align: center;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-month-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #f8fafc;
+	color: var(--zbm-brand);
+	font-size: 1.2rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-month-button:hover,
+.zbm-vendor-reports .zbm-vendor-report-jalali-month-button:focus-visible {
+	border-color: var(--zbm-brand);
+	background: rgba(0, 175, 35, .08);
+	color: var(--zbm-action-green);
+	outline: 2px solid rgba(0, 175, 35, .18);
+	outline-offset: 1px;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-month-button:disabled {
+	opacity: .45;
+	cursor: not-allowed;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-weekdays {
+	margin-bottom: 5px;
+	color: #64748b;
+	font-size: .75rem;
+	font-weight: 800;
+	text-align: center;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-weekdays span {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px 0;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-day {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: 34px;
+	padding: 4px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background: #fff;
+	color: #0f172a;
+	font: inherit;
+	cursor: pointer;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-day:hover,
+.zbm-vendor-reports .zbm-vendor-report-jalali-day:focus-visible,
+.zbm-vendor-reports .zbm-vendor-report-jalali-day.is-selected {
+	border-color: var(--zbm-brand);
+	background: rgba(0, 175, 35, .10);
+	color: var(--zbm-action-green);
+	outline: none;
+}
+
+.zbm-vendor-reports .zbm-vendor-report-jalali-day:disabled {
+	background: #f8fafc;
+	color: #cbd5e1;
+	cursor: not-allowed;
+}
+
+.zbm-vendor-reports .zbm-reports-metrics {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	margin: 0 0 14px;
+	direction: ltr;
+}
+
+.zbm-vendor-reports .zbm-report-metric {
+	display: flex;
+	min-width: 0;
+	min-height: 148px;
+	flex-direction: column;
+	align-items: center;
+	gap: 9px;
+	padding: 17px 18px;
+	border: 1px solid transparent;
+	border-radius: 12px;
+	background: #fff;
+	color: var(--zbm-report-ink);
+	font: inherit;
+	text-align: center;
+	cursor: pointer;
+	direction: rtl;
+	transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.zbm-vendor-reports .zbm-report-metric:hover,
+.zbm-vendor-reports .zbm-report-metric:focus-visible {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px rgba(30, 27, 75, .10);
+	outline: none;
+}
+
+.zbm-vendor-reports .zbm-report-metric[aria-pressed="false"] {
+	opacity: .48;
+	box-shadow: none;
+}
+
+.zbm-vendor-reports .zbm-report-metric-deposit {
+	border-color: #ddd6fe;
+	background: linear-gradient(145deg, #7c3aed, #6d28d9);
+	color: #fff;
+}
+
+.zbm-vendor-reports .zbm-report-metric-balance {
+	border-color: #c7d2fe;
+	background: linear-gradient(145deg, #6366f1, #4f46e5);
+	color: #fff;
+}
+
+.zbm-vendor-reports .zbm-report-metric-requests {
+	border-color: #e9d5ff;
+	background: linear-gradient(145deg, #c084fc, #a855f7);
+	color: #fff;
+}
+
+.zbm-vendor-reports .zbm-report-metric-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: .98rem;
+	font-weight: 800;
+}
+
+.zbm-vendor-reports .zbm-report-metric-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, .92);
+	box-shadow: 0 0 0 4px rgba(255, 255, 255, .18);
+}
+
+.zbm-vendor-reports .zbm-report-metric strong {
+	width: 100%;
+	max-width: 100%;
+	text-align: center;
+	color: inherit;
+	font-size: clamp(1.25rem, 2.1vw, 1.78rem);
+	line-height: 1.45;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.zbm-vendor-reports .zbm-report-metric strong .woocommerce-Price-amount {
+	color: inherit;
+	font-size: inherit;
+}
+
+.zbm-vendor-reports .zbm-report-metric small {
+	width: 100%;
+	margin-top: auto;
+	color: rgba(255, 255, 255, .80);
+	font-size: .82rem;
+	line-height: 1.7;
+}
+
+.zbm-vendor-reports .zbm-reports-chart {
+	min-width: 0;
+	padding: 18px 18px 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 14px;
+	background: #fff;
+	box-shadow: 0 6px 22px rgba(15, 23, 42, .04);
+}
+
+.zbm-vendor-reports .zbm-reports-chart-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 9px;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-head > div {
+	display: grid;
+	gap: 3px;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-head strong {
+	color: #1e1b4b;
+	font-size: 1rem;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-head span,
+.zbm-vendor-reports .zbm-reports-chart-range {
+	color: #64748b;
+	font-size: .84rem;
+	line-height: 1.7;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-range {
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-viewport {
+	max-width: 100%;
+	overflow-x: auto;
+	direction: ltr;
+	scrollbar-width: thin;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-plot {
+	position: relative;
+	direction: rtl;
+	width: 100%;
+	height: clamp(240px, 32vw, 360px);
+	min-height: 240px;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.zbm-vendor-reports [data-chart-grid] line {
+	stroke: #e2e8f0;
+	stroke-width: 1;
+	stroke-dasharray: 3 5;
+}
+
+.zbm-vendor-reports [data-chart-axis] text {
+	fill: #94a3b8;
+	font-family: inherit;
+	font-size: 13px;
+}
+
+.zbm-vendor-reports [data-chart-axis] line {
+	stroke: #cbd5e1;
+	stroke-width: 1;
+}
+
+.zbm-vendor-reports [data-chart-series] path {
+	fill: none;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 3;
+	vector-effect: non-scaling-stroke;
+	transition: opacity .18s ease;
+}
+
+.zbm-vendor-reports [data-chart-series] path[data-series="deposit"] {
+	stroke: #7c3aed;
+}
+
+.zbm-vendor-reports [data-chart-series] path[data-series="balance"] {
+	stroke: #4f46e5;
+}
+
+.zbm-vendor-reports [data-chart-series] path[data-series="requests"] {
+	stroke: #a855f7;
+}
+
+.zbm-vendor-reports [data-chart-series] path[hidden],
+.zbm-vendor-reports [data-chart-points] g[hidden] {
+	display: none;
+}
+
+.zbm-vendor-reports [data-chart-points] circle {
+	stroke: #fff;
+	stroke-width: 2;
+	vector-effect: non-scaling-stroke;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-tooltip {
+	position: absolute;
+	z-index: 2;
+	min-width: 145px;
+	padding: 9px 11px;
+	border: 1px solid #e2e8f0;
+	border-radius: 9px;
+	background: rgba(255, 255, 255, .97);
+	box-shadow: 0 10px 28px rgba(15, 23, 42, .16);
+	color: #1e1b4b;
+	font-size: .8rem;
+	line-height: 1.8;
+	pointer-events: none;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-tooltip[hidden] {
+	display: none !important;
+}
+
+.zbm-vendor-reports .zbm-reports-chart-note {
+	margin: 5px 0 0;
+	color: #64748b;
+	font-size: .82rem;
+	line-height: 1.75;
+}
+
+@media (max-width: 767px) {
+	.zbm-vendor-reports .zbm-reports-metrics {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.zbm-vendor-reports .zbm-report-metric {
+		min-height: 124px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-chart {
+		padding: 14px 10px 10px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-chart-head {
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.zbm-vendor-reports .zbm-reports-chart-range {
+		align-self: flex-start;
+	}
+
+	.zbm-vendor-reports .zbm-reports-chart-plot {
+		width: max(100%, 680px);
+		height: 260px;
+		min-height: 220px;
+	}
+
+	.zbm-vendor-reports .zbm-vendor-report-jalali-picker {
+		width: min(320px, calc(100vw - 42px));
+	}
+}

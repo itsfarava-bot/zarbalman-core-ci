@@ -1,0 +1,22 @@
+parameters:
+    ignoreErrors:
+        -
+            message: "#^Parameter \\#1 \\$item of method Zarbalman\\\\Core\\\\Frontend\\\\OrderWorkflowPanel::declared_package_weight\\(\\) expects WC_Order_Item_Product, WC_Order_Item given\\.$#"
+            count: 1
+            path: plugin/src/Frontend/OrderWorkflowPanel.php
+        -
+            message: "#^Call to an undefined method WC_Order_Item::get_product\\(\\)\\.$#"
+            count: 8
+            path: plugin/src/Integration/WooCommerceOrderAdapter.php
+        -
+            message: "#^Parameter \\#2 \\$value of method WC_Data::update_meta_data\\(\\) expects array\\|string, int given\\.$#"
+            count: 15
+            path: plugin/src/Integration/WooCommerceOrderAdapter.php
+        -
+            message: "#^Parameter \\#2 \\$value of method WC_Data::update_meta_data\\(\\) expects array\\|string, int given\\.$#"
+            count: 3
+            path: plugin/src/Integration/YithDepositAdapter.php
+        -
+            message: "#^Parameter \\#2 \\$value of method WC_Data::update_meta_data\\(\\) expects array\\|string, true given\\.$#"
+            count: 2
+            path: plugin/src/Integration/YithDepositAdapter.php

@@ -1,0 +1,15 @@
+includes:
+    - phpstan-stub-baseline.neon
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+parameters:
+    level: 5
+    paths:
+        - plugin
+    tmpDir: .runtime/phpstan
+    bootstrapFiles:
+        - ci/phpstan-bootstrap.php
+    scanFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        - vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+        - vendor/php-stubs/woocommerce-stubs/woocommerce-packages-stubs.php
+# Exact WordPress stubs prepared per matrix job; only 29 exact, runtime-verified WooCommerce stub findings baselined.

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" failOnWarning="true" failOnRisky="true" colors="false">
+  <testsuites>
+    <testsuite name="Task 3 ordered candidate verification and prior regressions">
+      <directory>tests/smoke</directory>
+      <file>tests/candidates/FinanceDestinationTest.php</file>
+      <file>tests/candidates/MigratorUpgradeTest.php</file>
+      <file>tests/candidates/NotificationDeliveryTest.php</file>
+      <file>tests/candidates/EvidenceUploadTest.php</file>
+      <file>tests/candidates/EndpointSecurityTest.php</file>
+      <file>tests/candidates/LockFailureTest.php</file>
+      <file>tests/candidates/RequestNumberEntropyTest.php</file>
+    </testsuite>
+  </testsuites>
+</phpunit>

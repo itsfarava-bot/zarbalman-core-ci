@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+[allowlist]
+description = "Independently verified source file SHA-256 digests only"
+condition = "AND"
+paths = ['''(^|/)source-sha256\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"[^"\r\n]+": "[a-f0-9]{64}",?\s*$''']
