@@ -48,19 +48,49 @@ final class LifecycleTest extends TestCase {
             self::assertIsResource($process); $output = stream_get_contents($pipes[1]); $errors = stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]);
             self::assertSame(0, proc_close($process), $output . $errors);
         };
+        $requestRows = static function () use ($wpdb, $schema): array {
+            $rows = $wpdb->get_results($wpdb->prepare('SELECT * FROM %i ORDER BY id', $schema->purchase_requests_table()), ARRAY_A);
+            self::assertIsArray($rows); self::assertSame('', $wpdb->last_error);
+            return array_column($rows, null, 'id');
+        };
+        $columns = static function (array $before, array $after): array {
+            $changes = [];
+            foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $rowId) {
+                $old = $before[$rowId] ?? []; $new = $after[$rowId] ?? [];
+                foreach (array_unique(array_merge(array_keys($old), array_keys($new))) as $column) {
+                    $a = $old[$column] ?? null; $b = $new[$column] ?? null;
+                    if ($a === $b) { continue; }
+                    $private = preg_match('/email|phone|secret|key|cipher|encrypt|iban|card|payload/i', $column) === 1;
+                    $changes[] = ['id' => (int) $rowId, 'column' => $column, 'before' => $private && $a !== null ? '[redacted]' : $a, 'after' => $private && $b !== null ? '[redacted]' : $b];
+                }
+            }
+            return $changes;
+        };
+        $beforeDeactivateRows = $requestRows();
         $run('deactivate');
+        $afterDeactivateRows = $requestRows();
         self::assertFalse(as_has_scheduled_action($hook, [$id], Scheduler::GROUP));
         // Persist an elapsed clock boundary while inactive, without changing the system clock.
         self::assertSame(1, $wpdb->update($schema->workflows_table(), ['buyer_deadline_gmt' => gmdate('Y-m-d H:i:s', time() - 60)], ['order_id' => $id]));
         $store = new \Zarbalman\Core\Infrastructure\WorkflowStore($wpdb, $repos['audit']);
         $before = $store->snapshot($id); self::assertSame('delivered', $before['state']);
         $finance = CandidateFixture::financialSnapshot();
+        $beforeActivateRows = $requestRows();
         $run('activate');
+        $afterActivateRows = $requestRows();
         $admin = get_user_by('login', 'zbm_test_admin'); self::assertInstanceOf(WP_User::class, $admin);
         [$cookie] = CandidateHttp::auth((int) $admin->ID, 'unused-sweep-read');
         $http = Task4EndpointHttp::get('task4-endpoint-harness.php', ['view' => 'deadline-sweep'], $cookie);
         self::assertSame(200, $http['status']); $result = json_decode($http['body'], true, 32, JSON_THROW_ON_ERROR);
         file_put_contents(__DIR__ . '/../../evidence/task4-reactivation.json', wp_json_encode(['before' => $before, 'after' => $store->snapshot($id), 'sweep' => $result]));
+        $afterSweepRows = $requestRows();
+        file_put_contents(__DIR__ . '/../../evidence/task4-lifecycle-columns.json', wp_json_encode([
+            'overdue_order_id' => $id,
+            'request_ids_before' => array_map('intval', array_keys($beforeDeactivateRows)),
+            'deactivate' => $columns($beforeDeactivateRows, $afterDeactivateRows),
+            'activate' => $columns($beforeActivateRows, $afterActivateRows),
+            'sweep' => $columns($afterActivateRows, $afterSweepRows),
+        ], JSON_PRETTY_PRINT));
         self::assertTrue($result['registered']); self::assertTrue($result['scheduled']);
         self::assertSame('admin_review', $store->snapshot($id)['state']); self::assertSame($before['version'] + 1, $store->snapshot($id)['version']);
         self::assertSame($finance, CandidateFixture::financialSnapshot());
