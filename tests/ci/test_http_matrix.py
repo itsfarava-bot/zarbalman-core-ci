@@ -314,8 +314,11 @@ class HttpMatrixTest(unittest.TestCase):
                                'redirect_path': '', 'redirect_is_local_home': True},
                            upstream_contract={'dependency_version': '5.0.10', 'hook': 'admin_init',
                                'callback': 'WeDevs\\Dokan\\Core::block_admin_access', 'registered': True, 'priority': 10,
+                               'http_probe_verified': True, 'wc_prevent_access': False,
+                               'callback_order': 2, 'woocommerce_callback_order': 1,
                                'source_contract_verified': True, 'source_path': '/wp/plugins/dokan-lite/includes/Core.php',
                                'hpos_enabled': True, 'configured_admin_access': 'off', 'effective_admin_access': 'on',
+                               'hpos_helper_class': 'WeDevs\\Dokan\\Utilities\\OrderUtil', 'hpos_option_enabled': 'yes',
                                'actor_roles': [role], 'primary_role': role, 'manage_options': False,
                                'request_page': 'options.php', 'page_exempt': False, 'nonce_verified': True,
                                'redirect_is_local_home': True, 'redirect_url': 'http://localhost', 'home_url': 'http://localhost',
@@ -344,7 +347,10 @@ class HttpMatrixTest(unittest.TestCase):
             for key, value in (('dependency_version', 'other'), ('registered', False), ('source_contract_verified', False),
                                ('source_path', '/claimed/Core.php'), ('callback', 'claimed'), ('hook', 'other'),
                                ('hpos_enabled', False), ('effective_admin_access', 'off'), ('request_page', 'admin.php'),
+                               ('hpos_helper_class', 'WooCommerce\\Utilities\\OrderUtil'), ('hpos_option_enabled', 'no'),
                                ('page_exempt', True), ('nonce_verified', False), ('redirect_path', '/wrong'),
+                               ('http_probe_verified', False), ('wc_prevent_access', True),
+                               ('callback_order', 1), ('woocommerce_callback_order', 3),
                                ('redirect_url', 'http://external.example'), ('home_path', '/wrong')):
                 bad = copy.deepcopy(control); bad['upstream_contract'][key] = value
                 with self.subTest(scenario=scenario, key=key): self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
@@ -366,6 +372,64 @@ class HttpMatrixTest(unittest.TestCase):
         self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
         bad = copy.deepcopy(control); bad['actor'] = 'vendor_2'
         self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
+
+    def woocommerce_settings_control(self, record, scenario='wrong_role'):
+        control = copy.deepcopy(record['controls'][scenario])
+        control.update(denial_layer='woocommerce_admin_init', message='woocommerce_prevent_admin_access_local_account_redirect',
+                       observed_response={'message': 'woocommerce_prevent_admin_access_local_account_redirect',
+                           'redirect_path': '/', 'redirect_is_local_account': True},
+                       upstream_contract={'dependency_version': '10.9.4', 'hook': 'admin_init', 'callback': 'WC_Admin::prevent_admin_access',
+                           'registered': True, 'priority': 10, 'source_path': '/wp/plugins/woocommerce/includes/admin/class-wc-admin.php',
+                           'source_contract_verified': True, 'http_probe_verified': True, 'callback_order': 1, 'dokan_callback_order': 2,
+                           'runs_before_dokan': True, 'actor_roles': ['customer'], 'primary_role': 'customer',
+                           'manage_options': False, 'edit_posts': False, 'manage_woocommerce': False,
+                           'view_admin_dashboard': False, 'doing_ajax': False, 'disable_admin_bar': True, 'prevent_access': True,
+                           'request_page': 'options.php', 'page_exempt': False, 'nonce_verified': True,
+                           'expected_url': 'http://localhost/?page_id=8', 'my_account_url': 'http://localhost/?page_id=8',
+                           'redirect_url': 'http://localhost/?page_id=8', 'expected_path': '/', 'redirect_path': '/',
+                           'expected_query': 'page_id=8', 'redirect_query': 'page_id=8'})
+        return control
+
+    def test_settings_woocommerce_customer_gate_requires_exact_native_request_and_order_proof(self):
+        row, binding, record, junit = self.settings_record()
+        for scenario in ('wrong_role', 'other_buyer'):
+            control = self.woocommerce_settings_control(record, scenario)
+            self.assertTrue(M.form_negative(row['id'], scenario, control, binding, junit))
+            for key, value in (('dependency_version', 'other'), ('callback', 'claimed'), ('registered', False),
+                               ('source_path', '/claimed/class-wc-admin.php'), ('source_contract_verified', False), ('http_probe_verified', False),
+                               ('callback_order', 3), ('runs_before_dokan', False), ('edit_posts', True), ('manage_woocommerce', True),
+                               ('view_admin_dashboard', True), ('doing_ajax', True), ('disable_admin_bar', False), ('prevent_access', False),
+                               ('request_page', 'other.php'), ('page_exempt', True), ('nonce_verified', False),
+                               ('expected_path', '/wrong'), ('redirect_path', '/wrong'), ('redirect_query', 'page_id=9'),
+                               ('expected_query', 'page_id=9'), ('my_account_url', 'http://localhost/?page_id=9'),
+                               ('redirect_url', 'http://external.example/?page_id=8')):
+                bad = copy.deepcopy(control); bad['upstream_contract'][key] = value
+                with self.subTest(scenario=scenario, key=key): self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            bad = copy.deepcopy(control); del bad['upstream_contract']
+            self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+            self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            self.assertFalse(M.form_negative(row['id'], scenario, control, binding, {}))
+        vendor = self.woocommerce_settings_control(record, 'other_vendor')
+        self.assertFalse(M.form_negative(row['id'], 'other_vendor', vendor, binding, junit))
+
+    def test_settings_earlier_woocommerce_gate_does_not_waive_dokan_vendor_or_direct_wp_controls(self):
+        row, binding, record, junit = self.settings_record()
+        for scenario in ('wrong_role', 'other_buyer'):
+            record['controls'][scenario] = self.woocommerce_settings_control(record, scenario)
+        supplemental = {binding['file']: {row['id']: record}}
+        gaps, na, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertEqual([], gaps)
+        self.assertEqual({}, na)
+        del record['controls']['other_vendor']['upstream_contract']
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertIn('negative:form:other_vendor', gaps)
+        del record['controls']['capability_denied']
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertIn('negative:form:capability_denied', gaps)
+        del record['controls']['maximum_1440']
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertIn('positive:form-contract', gaps)
 
     def test_settings_upstream_denials_still_require_positive_ranges_and_direct_wp_capability_denial(self):
         row, binding, record, junit = self.settings_record()

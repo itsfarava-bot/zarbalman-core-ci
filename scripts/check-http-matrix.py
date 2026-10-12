@@ -405,6 +405,8 @@ def form_positive(row_id, control, binding, junit):
 
 
 def settings_upstream_role_denial(scenario, control):
+    if control.get('denial_layer') == 'woocommerce_admin_init':
+        return settings_woocommerce_role_denial(scenario, control)
     proof = control.get('upstream_contract', {})
     response = control.get('observed_response', {})
     if not isinstance(proof, dict) or not isinstance(response, dict): return False
@@ -413,8 +415,10 @@ def settings_upstream_role_denial(scenario, control):
     home, redirect = proof.get('home_url'), proof.get('redirect_url')
     if not isinstance(home, str) or not isinstance(redirect, str): return False
     parsed = urlsplit(home)
+    callback_order, woocommerce_order = proof.get('callback_order'), proof.get('woocommerce_callback_order')
     return (control.get('type') == 'validation' and control.get('http') == 302
             and control.get('actor') == expected_actor and expected_actor is not None
+            and control.get('actor_valid') is False
             and control.get('nonce_valid') is True and control.get('persisted_assertions') is True
             and control.get('denial_layer') == 'dokan_admin_init'
             and control.get('message') == response.get('message') == 'dokan_block_admin_access_local_home_redirect'
@@ -424,6 +428,9 @@ def settings_upstream_role_denial(scenario, control):
             and proof.get('dependency_version') == '5.0.10' and proof.get('hook') == 'admin_init'
             and proof.get('callback') == 'WeDevs\\Dokan\\Core::block_admin_access' and proof.get('priority') == 10
             and all(proof.get(key) is True for key in ('registered', 'source_contract_verified', 'hpos_enabled', 'nonce_verified', 'redirect_is_local_home'))
+            and proof.get('http_probe_verified') is True and proof.get('wc_prevent_access') is False
+            and isinstance(callback_order, int) and isinstance(woocommerce_order, int) and 0 < woocommerce_order < callback_order
+            and proof.get('hpos_helper_class') == 'WeDevs\\Dokan\\Utilities\\OrderUtil' and proof.get('hpos_option_enabled') == 'yes'
             and isinstance(proof.get('source_path'), str) and proof['source_path'].endswith('/dokan-lite/includes/Core.php')
             and proof.get('configured_admin_access') in ('on', 'off') and proof.get('effective_admin_access') == 'on'
             and proof.get('actor_roles') == [expected_role] and proof.get('primary_role') == expected_role
@@ -431,6 +438,38 @@ def settings_upstream_role_denial(scenario, control):
             and parsed.scheme in ('http', 'https') and bool(parsed.netloc) and not parsed.query and not parsed.fragment
             and home == redirect and proof.get('home_path') == proof.get('redirect_path') == response.get('redirect_path') == parsed.path
             and response.get('redirect_is_local_home') is True)
+
+
+def settings_woocommerce_role_denial(scenario, control):
+    proof = control.get('upstream_contract', {})
+    response = control.get('observed_response', {})
+    if not isinstance(proof, dict) or not isinstance(response, dict): return False
+    actor = {'wrong_role': 'buyer_1', 'other_buyer': 'buyer_2'}.get(scenario)
+    expected, redirect = proof.get('expected_url'), proof.get('redirect_url')
+    if not isinstance(expected, str) or not isinstance(redirect, str): return False
+    parsed = urlsplit(expected)
+    callback_order, dokan_order = proof.get('callback_order'), proof.get('dokan_callback_order')
+    return (actor is not None and control.get('actor') == actor and control.get('actor_valid') is False
+            and control.get('type') == 'validation' and control.get('http') == 302
+            and control.get('nonce_valid') is True and control.get('persisted_assertions') is True
+            and control.get('denial_layer') == 'woocommerce_admin_init'
+            and control.get('message') == response.get('message') == 'woocommerce_prevent_admin_access_local_account_redirect'
+            and control.get('before_options') == control.get('after_options')
+            and isinstance(control.get('before_options'), dict)
+            and set(control['before_options']) == {'zbm_core_delivery_reminder_minutes', 'zbm_core_sms_templates'}
+            and proof.get('dependency_version') == '10.9.4' and proof.get('hook') == 'admin_init'
+            and proof.get('callback') == 'WC_Admin::prevent_admin_access' and proof.get('priority') == 10
+            and isinstance(proof.get('source_path'), str) and proof['source_path'].endswith('/woocommerce/includes/admin/class-wc-admin.php')
+            and all(proof.get(key) is True for key in ('registered', 'source_contract_verified', 'http_probe_verified', 'runs_before_dokan', 'nonce_verified', 'disable_admin_bar', 'prevent_access'))
+            and isinstance(callback_order, int) and isinstance(dokan_order, int) and 0 < callback_order < dokan_order
+            and proof.get('actor_roles') == ['customer'] and proof.get('primary_role') == 'customer'
+            and all(proof.get(key) is False for key in ('manage_options', 'edit_posts', 'manage_woocommerce', 'view_admin_dashboard', 'doing_ajax', 'page_exempt'))
+            and proof.get('request_page') == 'options.php'
+            and parsed.scheme in ('http', 'https') and bool(parsed.netloc) and not parsed.fragment
+            and expected == proof.get('my_account_url') == redirect
+            and proof.get('expected_path') == proof.get('redirect_path') == response.get('redirect_path') == parsed.path
+            and proof.get('expected_query') == proof.get('redirect_query') == parsed.query
+            and response.get('redirect_is_local_account') is True)
 
 
 def settings_direct_capability_denial(control):

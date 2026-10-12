@@ -13,6 +13,7 @@ use Zarbalman\Core\Infrastructure\{Schema, WorkflowStore};
 /** Real registered renderers and handlers; fixtures never simulate payment success. */
 final class EndpointFormControlsTest extends TestCase {
     private const EVIDENCE = __DIR__ . '/../../evidence/http-form-controls.json';
+    private const GATE_EVIDENCE = __DIR__ . '/../../evidence/http-settings-native-gate.json';
     private string $catalogId = '';
     private string $testMethod = '';
 
@@ -115,8 +116,98 @@ final class EndpointFormControlsTest extends TestCase {
         self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
         self::assertStringEndsWith('/wp-login.php', (string) parse_url($location, PHP_URL_PATH));
     }
+    /** Observe the actual HTTP-process hooks without replacing or invoking either native gate. */
+    private function installSettingsGateObserver(): string {
+        $root = getenv('ZBM_TEST_WP_ROOT'); self::assertIsString($root); self::assertNotSame('', $root);
+        $path = $root . '/wp-content/mu-plugins/zbm-task4-settings-gate-observer.php'; self::assertFileDoesNotExist($path);
+        $code = <<<'PHP'
+<?php
+if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { return; }
+add_action('admin_init', static function (): void {
+    global $pagenow, $wp_filter;
+    if ($pagenow !== 'options.php' || ($_POST['option_page'] ?? '') !== 'zbm_core_spec3') { return; }
+    $callbacks = $wp_filter['admin_init']->callbacks; ksort($callbacks, SORT_NUMERIC); $order = 0; $gates = [];
+    foreach ($callbacks as $priority => $entries) {
+        foreach ($entries as $entry) {
+            ++$order; $callback = $entry['function'];
+            if (!is_array($callback) || !is_object($callback[0])) { continue; }
+            $name = get_class($callback[0]) . '::' . $callback[1];
+            if (!in_array($name, ['WC_Admin::prevent_admin_access', 'WeDevs\\Dokan\\Core::block_admin_access'], true)) { continue; }
+            $method = new ReflectionMethod($callback[0], $callback[1]); $path = $method->getFileName(); $lines = file($path);
+            $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+            $source = preg_replace('~/\*.*?\*/|//[^\r\n]*~s', '', $source); $compact = preg_replace('/\s+/', '', $source);
+            $required = $name === 'WC_Admin::prevent_admin_access' ? [
+                "\$exempted_paths=array('admin-post.php','admin-ajax.php');",
+                "apply_filters('woocommerce_disable_admin_bar',true)&&isset(\$_SERVER['SCRIPT_FILENAME'])&&!in_array(basename(sanitize_text_field(wp_unslash(\$_SERVER['SCRIPT_FILENAME']))),\$exempted_paths,true)",
+                "\$access_caps=array('edit_posts','manage_woocommerce','view_admin_dashboard');",
+                'foreach($access_capsas$access_cap){if(current_user_can($access_cap)){$has_cap=true;break;}}',
+                'if(!$has_cap){$prevent_access=true;}',
+                "if(apply_filters('woocommerce_prevent_admin_access',\$prevent_access)){wp_safe_redirect(wc_get_page_permalink('myaccount'));exit;}"
+            ] : [
+                "\$no_access=dokan_get_option('admin_access','dokan_general','on');",
+                "if(OrderUtil::is_hpos_enabled()){\$no_access='on';}",
+                "\$valid_pages=['admin-ajax.php','admin-post.php','async-upload.php','media-upload.php'];",
+                '$user_role=reset($current_user->roles);',
+                "if(('on'===\$no_access)&&(!in_array(\$pagenow,\$valid_pages,true))&&in_array(\$user_role,['seller','customer','vendor_staff'],true)){wp_safe_redirect(home_url());exit;}"
+            ];
+            $verified = true; foreach ($required as $fragment) { $verified = $verified && str_contains($compact, $fragment); }
+            $gates[$name] = ['priority' => $priority, 'callback_order' => $order, 'source_path' => $path, 'source_contract_verified' => $verified];
+        }
+    }
+    $user = wp_get_current_user(); $caps = [];
+    foreach (['manage_options', 'edit_posts', 'manage_woocommerce', 'view_admin_dashboard'] as $cap) { $caps[$cap] = current_user_can($cap); }
+    $disableBar = apply_filters('woocommerce_disable_admin_bar', true);
+    $script = isset($_SERVER['SCRIPT_FILENAME']) ? basename(sanitize_text_field(wp_unslash($_SERVER['SCRIPT_FILENAME']))) : '';
+    $prevent = $disableBar && $script !== '' && !in_array($script, ['admin-post.php', 'admin-ajax.php'], true)
+        && !$caps['edit_posts'] && !$caps['manage_woocommerce'] && !$caps['view_admin_dashboard'];
+    $record = ['actor_user_id' => $user->ID, 'actor_roles' => $user->roles, 'gates' => $gates, 'caps' => $caps,
+        'wc_version' => WC_VERSION, 'request_page' => $script, 'doing_ajax' => wp_doing_ajax(),
+        'disable_admin_bar' => $disableBar, 'prevent_access' => apply_filters('woocommerce_prevent_admin_access', $prevent),
+        'nonce_verified' => isset($_POST['_wpnonce']) && wp_verify_nonce((string) $_POST['_wpnonce'], 'zbm_core_spec3-options') !== false,
+        'my_account_url' => wc_get_page_permalink('myaccount'), 'home_url' => home_url()];
+    file_put_contents(__EVIDENCE_PATH__, wp_json_encode($record, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), LOCK_EX);
+}, 0);
+PHP;
+        $code = str_replace('__EVIDENCE_PATH__', var_export(self::GATE_EVIDENCE, true), $code);
+        self::assertSame(strlen($code), file_put_contents($path, $code, LOCK_EX));
+        return $path;
+    }
+    private function nativeSettingsGate(array $http, string $actor): array {
+        $probe = json_decode((string) file_get_contents(self::GATE_EVIDENCE), true, 32, JSON_THROW_ON_ERROR);
+        self::assertSame($this->user($actor), $probe['actor_user_id']); self::assertSame('options.php', $probe['request_page']);
+        self::assertSame('10.9.4', $probe['wc_version']); self::assertFalse($probe['doing_ajax']); self::assertTrue($probe['nonce_verified']);
+        $wc = $probe['gates']['WC_Admin::prevent_admin_access']; $dokan = $probe['gates']['WeDevs\\Dokan\\Core::block_admin_access'];
+        self::assertSame(10, $wc['priority']); self::assertSame(10, $dokan['priority']);
+        self::assertTrue($wc['source_contract_verified']); self::assertTrue($dokan['source_contract_verified']);
+        self::assertStringEndsWith('/woocommerce/includes/admin/class-wc-admin.php', $wc['source_path']);
+        self::assertGreaterThan($wc['callback_order'], $dokan['callback_order']);
+        if ($actor === 'vendor_2') { self::assertFalse($probe['prevent_access']); return $probe; }
+        self::assertSame(['customer'], $probe['actor_roles']);
+        foreach ($probe['caps'] as $allowed) { self::assertFalse($allowed); }
+        self::assertTrue($probe['disable_admin_bar']); self::assertTrue($probe['prevent_access']);
+        self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
+        self::assertSame($probe['my_account_url'], $location); self::assertSame($location, wp_validate_redirect($location, ''));
+        self::assertSame(parse_url(home_url(), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+        return $probe;
+    }
+    private function wooOptionsDenial(array $http, array $probe): array {
+        $wc = $probe['gates']['WC_Admin::prevent_admin_access']; $dokan = $probe['gates']['WeDevs\\Dokan\\Core::block_admin_access'];
+        $location = Task4EndpointHttp::header($http, 'Location');
+        return ['dependency_version' => $probe['wc_version'], 'hook' => 'admin_init', 'callback' => 'WC_Admin::prevent_admin_access',
+            'registered' => true, 'priority' => $wc['priority'], 'source_path' => $wc['source_path'], 'source_contract_verified' => true,
+            'callback_order' => $wc['callback_order'], 'dokan_callback_order' => $dokan['callback_order'], 'runs_before_dokan' => true,
+            'actor_roles' => $probe['actor_roles'], 'primary_role' => 'customer', 'manage_options' => $probe['caps']['manage_options'],
+            'edit_posts' => $probe['caps']['edit_posts'], 'manage_woocommerce' => $probe['caps']['manage_woocommerce'],
+            'view_admin_dashboard' => $probe['caps']['view_admin_dashboard'], 'doing_ajax' => $probe['doing_ajax'],
+            'disable_admin_bar' => $probe['disable_admin_bar'], 'prevent_access' => $probe['prevent_access'],
+            'request_page' => $probe['request_page'], 'page_exempt' => false, 'nonce_verified' => $probe['nonce_verified'],
+            'my_account_url' => $probe['my_account_url'], 'expected_url' => $probe['my_account_url'], 'redirect_url' => $location,
+            'expected_path' => (string) parse_url($probe['my_account_url'], PHP_URL_PATH), 'redirect_path' => (string) parse_url($location, PHP_URL_PATH),
+            'expected_query' => (string) parse_url($probe['my_account_url'], PHP_URL_QUERY), 'redirect_query' => (string) parse_url($location, PHP_URL_QUERY),
+            'http_probe_verified' => true];
+    }
     /** Verify the native pinned dependency gate rather than accepting an arbitrary redirect. */
-    private function dokanOptionsDenial(array $http, string $actor, string $nonce): array {
+    private function dokanOptionsDenial(array $http, string $actor, string $nonce, array $probe): array {
         self::assertTrue(defined('DOKAN_PLUGIN_VERSION')); self::assertSame('5.0.10', DOKAN_PLUGIN_VERSION);
         self::assertTrue(class_exists(\WeDevs\Dokan\Core::class));
         global $wp_filter;
@@ -130,6 +221,7 @@ final class EndpointFormControlsTest extends TestCase {
         self::assertSame(10, $priority);
         $method = new ReflectionMethod(\WeDevs\Dokan\Core::class, 'block_admin_access'); $path = $method->getFileName();
         self::assertIsString($path); self::assertStringEndsWith('/dokan-lite/includes/Core.php', $path);
+        self::assertSame($path, $probe['gates']['WeDevs\\Dokan\\Core::block_admin_access']['source_path']);
         $lines = file($path); self::assertIsArray($lines);
         self::assertStringContainsString('use WeDevs\\Dokan\\Utilities\\OrderUtil;', implode('', $lines));
         $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
@@ -146,6 +238,7 @@ final class EndpointFormControlsTest extends TestCase {
         self::assertSame('on', $effective);
         $user = get_userdata($this->user($actor)); self::assertInstanceOf(WP_User::class, $user);
         $roles = $user->roles; $primary = reset($roles); self::assertContains($primary, ['customer', 'seller', 'vendor_staff']);
+        self::assertSame($roles, $probe['actor_roles']); self::assertFalse($probe['caps']['manage_options']);
         self::assertFalse(user_can($user, 'manage_options')); self::assertNotFalse(wp_verify_nonce($nonce, 'zbm_core_spec3-options'));
         self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
         self::assertSame(home_url(), $location); self::assertSame($location, wp_validate_redirect($location, ''));
@@ -157,7 +250,10 @@ final class EndpointFormControlsTest extends TestCase {
             'actor_roles' => $roles, 'primary_role' => $primary, 'manage_options' => false,
             'request_page' => 'options.php', 'page_exempt' => false, 'nonce_verified' => true,
             'redirect_is_local_home' => true, 'redirect_url' => $location, 'home_url' => home_url(),
-            'home_path' => (string) parse_url(home_url(), PHP_URL_PATH), 'redirect_path' => (string) parse_url($location, PHP_URL_PATH)];
+            'home_path' => (string) parse_url(home_url(), PHP_URL_PATH), 'redirect_path' => (string) parse_url($location, PHP_URL_PATH),
+            'http_probe_verified' => true, 'wc_prevent_access' => $probe['prevent_access'],
+            'callback_order' => $probe['gates']['WeDevs\\Dokan\\Core::block_admin_access']['callback_order'],
+            'woocommerce_callback_order' => $probe['gates']['WC_Admin::prevent_admin_access']['callback_order']];
     }
     private function result(array $http, string $expected): void {
         self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
@@ -255,7 +351,9 @@ final class EndpointFormControlsTest extends TestCase {
         };
         $old = ['zbm_core_delivery_reminder_minutes' => Task4EndpointHttp::option('zbm_core_delivery_reminder_minutes'),
             'zbm_core_sms_templates' => Task4EndpointHttp::option('zbm_core_sms_templates')];
+        $observer = null;
         try {
+            $observer = $this->installSettingsGateObserver();
             $this->catalog('http-016', __METHOD__, function () use ($admin, $restoreCapability): array {
                 $this->primeAdmin();
                 foreach (['authorized_positive', 'zero_disabled', 'minimum_five', 'maximum_1440', 'wrong_role', 'other_buyer', 'other_vendor',
@@ -293,6 +391,7 @@ final class EndpointFormControlsTest extends TestCase {
                     $before = $this->snapshot();
                     $beforeOptions = ['zbm_core_delivery_reminder_minutes' => Task4EndpointHttp::option('zbm_core_delivery_reminder_minutes'),
                         'zbm_core_sms_templates' => Task4EndpointHttp::option('zbm_core_sms_templates')];
+                    if (is_file(self::GATE_EVIDENCE)) { self::assertTrue(unlink(self::GATE_EVIDENCE)); }
                     try { $http = Task4RemainingHttp::request('POST', 'wp-admin/options.php', $fields, $cookie); }
                     finally { if ($scenario === 'capability_denied') { $restoreCapability(); } }
                     if ($capabilityContract !== null) {
@@ -311,7 +410,11 @@ final class EndpointFormControlsTest extends TestCase {
                     $invalid = in_array($scenario, ['below_range', 'above_range', 'invalid_integer'], true);
                     $denied = $actor !== 'admin' || in_array($scenario, ['capability_denied', 'no_nonce', 'invalid_nonce'], true);
                     if ($actor === 'guest') { $this->loginRedirect($http); $message = 'authentication_redirect_to_local_wp_login'; }
-                    elseif ($actor !== 'admin') { $upstreamContract = $this->dokanOptionsDenial($http, $actor, $nonce); $message = 'dokan_block_admin_access_local_home_redirect'; $denialLayer = 'dokan_admin_init'; }
+                    elseif ($actor !== 'admin') {
+                        $probe = $this->nativeSettingsGate($http, $actor);
+                        if ($actor === 'vendor_2') { $upstreamContract = $this->dokanOptionsDenial($http, $actor, $nonce, $probe); $message = 'dokan_block_admin_access_local_home_redirect'; $denialLayer = 'dokan_admin_init'; }
+                        else { $upstreamContract = $this->wooOptionsDenial($http, $probe); $message = 'woocommerce_prevent_admin_access_local_account_redirect'; $denialLayer = 'woocommerce_admin_init'; }
+                    }
                     elseif ($scenario === 'capability_denied') { $message = __('Sorry, you are not allowed to manage options for this site.'); $this->bodyMessage($http, 403, $message); $denialLayer = 'wordpress_options_capability'; }
                     elseif (in_array($scenario, ['no_nonce', 'invalid_nonce'], true)) { $message = __('The link you followed has expired.'); $this->bodyMessage($http, 403, $message); $denialLayer = 'wordpress_options_nonce'; }
                     else {
@@ -340,7 +443,8 @@ final class EndpointFormControlsTest extends TestCase {
                         'upstream_contract' => $upstreamContract, 'capability_contract' => $capabilityContract,
                         'observed_response' => ['message' => $message, 'notice' => $notice,
                             'redirect_path' => (string) parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH),
-                            'redirect_is_local_home' => $upstreamContract !== null],
+                            'redirect_is_local_home' => $denialLayer === 'dokan_admin_init',
+                            'redirect_is_local_account' => $denialLayer === 'woocommerce_admin_init'],
                         'stored_minutes' => (int) $storedMinutes, 'stored_templates' => $templates,
                         'before_options' => $beforeOptions, 'after_options' => ['zbm_core_delivery_reminder_minutes' => $storedMinutes, 'zbm_core_sms_templates' => $templates],
                         'verified_settings' => true,
@@ -350,6 +454,7 @@ final class EndpointFormControlsTest extends TestCase {
             });
         } finally {
             $restoreCapability();
+            if (is_string($observer) && is_file($observer)) { self::assertTrue(unlink($observer)); }
             $this->auth('admin', 'unused-setting-restore');
             foreach ($old as $option => $value) { $this->restoreOption($option, $value ?? ($option === 'zbm_core_sms_templates' ? [] : 60)); }
         }
