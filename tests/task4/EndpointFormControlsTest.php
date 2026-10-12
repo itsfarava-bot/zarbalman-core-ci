@@ -131,6 +131,7 @@ final class EndpointFormControlsTest extends TestCase {
         $method = new ReflectionMethod(\WeDevs\Dokan\Core::class, 'block_admin_access'); $path = $method->getFileName();
         self::assertIsString($path); self::assertStringEndsWith('/dokan-lite/includes/Core.php', $path);
         $lines = file($path); self::assertIsArray($lines);
+        self::assertStringContainsString('use WeDevs\\Dokan\\Utilities\\OrderUtil;', implode('', $lines));
         $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
         $compact = preg_replace('/\s+/', '', $source); self::assertIsString($compact);
         self::assertStringContainsString("\$no_access=dokan_get_option('admin_access','dokan_general','on');", $compact);
@@ -138,7 +139,9 @@ final class EndpointFormControlsTest extends TestCase {
         self::assertStringContainsString("\$valid_pages=['admin-ajax.php','admin-post.php','async-upload.php','media-upload.php'];", $compact);
         self::assertStringContainsString('$user_role=reset($current_user->roles);', $compact);
         self::assertStringContainsString("if(('on'===\$no_access)&&(!in_array(\$pagenow,\$valid_pages,true))&&in_array(\$user_role,['seller','customer','vendor_staff'],true)){wp_safe_redirect(home_url());exit;}", $compact);
-        $hpos = \Automattic\WooCommerce\Utilities\OrderUtil::is_hpos_enabled(); self::assertTrue($hpos);
+        self::assertTrue(method_exists(\WeDevs\Dokan\Utilities\OrderUtil::class, 'is_hpos_enabled'));
+        $hpos = \WeDevs\Dokan\Utilities\OrderUtil::is_hpos_enabled(); self::assertTrue($hpos);
+        $hposOption = Task4EndpointHttp::option('woocommerce_custom_orders_table_enabled'); self::assertSame('yes', $hposOption);
         $configured = dokan_get_option('admin_access', 'dokan_general', 'on'); $effective = $hpos ? 'on' : $configured;
         self::assertSame('on', $effective);
         $user = get_userdata($this->user($actor)); self::assertInstanceOf(WP_User::class, $user);
@@ -149,6 +152,7 @@ final class EndpointFormControlsTest extends TestCase {
         return ['dependency_version' => DOKAN_PLUGIN_VERSION, 'hook' => 'admin_init',
             'callback' => 'WeDevs\\Dokan\\Core::block_admin_access', 'registered' => true, 'priority' => $priority,
             'source_path' => $path, 'source_contract_verified' => true, 'hpos_enabled' => $hpos,
+            'hpos_helper_class' => \WeDevs\Dokan\Utilities\OrderUtil::class, 'hpos_option_enabled' => $hposOption,
             'configured_admin_access' => $configured, 'effective_admin_access' => $effective,
             'actor_roles' => $roles, 'primary_role' => $primary, 'manage_options' => false,
             'request_page' => 'options.php', 'page_exempt' => false, 'nonce_verified' => true,

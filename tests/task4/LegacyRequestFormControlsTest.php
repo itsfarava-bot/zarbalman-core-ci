@@ -142,6 +142,51 @@ final class LegacyRequestFormControlsTest extends TestCase {
         } }
         self::assertInstanceOf(Zarbalman\Core\Integration\WooCommerceOrderAdapter::class, $creator); return $creator;
     }
+    /** Native provenance checks return presence/origin facts only, never any email value. */
+    private function emailOriginDiagnostic(WC_Order $order): array {
+        global $wpdb;
+        $present = static fn (mixed $value): bool => trim((string) $value) !== '';
+        $data = $order->get_data(); $user = $order->get_user();
+        $stored = ['postmeta_billing_email' => (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE post_id=%d AND meta_key=%s AND TRIM(COALESCE(meta_value,''))<>''",
+            $wpdb->postmeta, $order->get_id(), '_billing_email')) > 0];
+        self::assertSame('', $wpdb->last_error);
+        foreach (['wc_orders' => ['id', 'billing_email'], 'wc_order_addresses' => ['order_id', 'email']] as $suffix => [$idColumn, $emailColumn]) {
+            $table = $wpdb->prefix . $suffix;
+            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))) === $table;
+            self::assertSame('', $wpdb->last_error);
+            $stored[$suffix . '_table_exists'] = $exists;
+            if ($exists) {
+                $columnExists = $wpdb->get_var($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $table, $emailColumn)) === $emailColumn;
+                self::assertSame('', $wpdb->last_error);
+                $stored[$suffix . '_email_column_exists'] = $columnExists;
+                if ($columnExists) {
+                    $stored[$suffix . '_email_present'] = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM %i WHERE %i=%d AND TRIM(COALESCE(%i,''))<>''", $table, $idColumn, $order->get_id(), $emailColumn)) > 0;
+                    self::assertSame('', $wpdb->last_error);
+                }
+            }
+        }
+        $accountStored = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE ID=%d AND TRIM(COALESCE(user_email,''))<>''", $wpdb->users, $order->get_customer_id('edit'))) > 0;
+        self::assertSame('', $wpdb->last_error);
+        $native = [];
+        foreach (['save', 'maybe_set_user_billing_email'] as $method) {
+            $reflection = new ReflectionMethod(WC_Order::class, $method);
+            $lines = file((string) $reflection->getFileName()); self::assertIsArray($lines);
+            $source = implode('', array_slice($lines, $reflection->getStartLine() - 1, $reflection->getEndLine() - $reflection->getStartLine() + 1));
+            $native[$method] = ['declaring_class' => $reflection->getDeclaringClass()->getName(), 'source_sha256' => hash('sha256', $source),
+                'calls_native_email_fallback' => str_contains($source, '$this->maybe_set_user_billing_email()'),
+                'copies_account_email' => str_contains($source, '$this->set_billing_email( $user->user_email )')];
+        }
+        return ['billing_email_edit_present' => $present($order->get_billing_email('edit')),
+            'billing_email_view_present' => $present($order->get_billing_email('view')),
+            'order_data_billing_email_present' => $present($data['billing']['email'] ?? ''),
+            'account_user_email_present' => $user instanceof WP_User && $present($user->user_email),
+            'account_user_email_stored_present' => $accountStored, 'stored_email_presence' => $stored,
+            'billing_email_view_filter_registered' => has_filter('woocommerce_order_get_billing_email') !== false,
+            'native_methods' => $native];
+    }
     /** Store exact amounts and enum facts; private identity/contact fields are presence flags only. */
     private function snapshotDiagnostic(WC_Order $order, $request): array {
         $pairs = [];
@@ -193,7 +238,7 @@ final class LegacyRequestFormControlsTest extends TestCase {
         foreach (['line_item', 'fee', 'shipping', 'coupon', 'tax'] as $type) { $counts[$type] = count($order->get_items($type)); }
         return ['order_id' => $order->get_id(), 'snapshot_matches' => ManagedOrderSnapshot::matches($order, $request),
             'pricing_metadata_matches' => ManagedOrderSnapshot::pricingMetadataMatches($order, $request), 'fields' => $pairs,
-            'private_field_present' => $privatePresence, 'item_counts' => $counts, 'items' => $items];
+            'private_field_present' => $privatePresence, 'email_origin' => $this->emailOriginDiagnostic($order), 'item_counts' => $counts, 'items' => $items];
     }
     private function exceptionMessages(Throwable $error): array {
         $chain = [];
