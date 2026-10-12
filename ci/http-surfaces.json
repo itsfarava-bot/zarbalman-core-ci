@@ -440,7 +440,15 @@
         "type": "form-contract",
         "key": "admin-search",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "form",
+          "file": "http-form-controls.json",
+          "key": "http-012",
+          "test": "EndpointFormControlsTest::test_admin_search_submits_actual_get_form_and_returns_only_exact_reference"
+        }
+      ]
     },
     {
       "id": "http-013",
@@ -465,7 +473,23 @@
         "type": "form-contract",
         "key": "purchase-request-state-control",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "form",
+          "file": "http-form-controls.json",
+          "key": "http-013",
+          "test": "EndpointFormControlsTest::test_rendered_request_pause_form_changes_only_control_state_and_has_exact_negatives"
+        }
+      ],
+      "branches": [
+        "pause",
+        "resume",
+        "reopen_supplier",
+        "reopen_deposit",
+        "accept_late",
+        "cancel_review"
+      ]
     },
     {
       "id": "http-014",
@@ -490,7 +514,18 @@
         "type": "form-contract",
         "key": "purchase-request-unverified-cancel",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "legacy-form",
+          "file": "http-legacy-request-form-controls.json",
+          "key": "http-014",
+          "test": "LegacyRequestFormControlsTest::test_rendered_late_cancel_preserves_valid_issued_online_identity_before_verification"
+        }
+      ],
+      "branches": [
+        "cancel_review"
+      ]
     },
     {
       "id": "http-015",
@@ -515,7 +550,28 @@
         "type": "form-contract",
         "key": "purchase-request-test-recovery",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "legacy-form",
+          "file": "http-legacy-request-form-controls.json",
+          "key": "http-015",
+          "test": "LegacyRequestFormControlsTest::test_actual_legacy_recovery_form_creates_only_quarantined_test_order_and_stock_reservation"
+        }
+      ],
+      "branches": [
+        "test_advance"
+      ],
+      "required_scenarios": [
+        "guest",
+        "wrong_role",
+        "other_buyer",
+        "other_vendor",
+        "no_nonce",
+        "invalid_nonce",
+        "missing_reason",
+        "stale_version"
+      ]
     },
     {
       "id": "http-016",
@@ -545,7 +601,15 @@
         "type": "form-contract",
         "key": "core-settings",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "form",
+          "file": "http-form-controls.json",
+          "key": "http-016",
+          "test": "EndpointFormControlsTest::test_settings_actual_options_form_commits_sanitized_values_and_preserves_named_denials"
+        }
+      ]
     },
     {
       "id": "http-017",
@@ -965,7 +1029,21 @@
         "type": "form-contract",
         "key": "frontend-workflow",
         "test": ""
-      }
+      },
+      "supplemental": [
+        {
+          "format": "form",
+          "file": "http-form-controls.json",
+          "key": "http-031",
+          "test": "EndpointFormControlsTest::test_frontend_registered_shortcode_transition_form_commits_owned_cancellation_only"
+        }
+      ],
+      "branches": [
+        "buyer_cancellation_requested",
+        "vendor_simple_transition",
+        "weight_upload_forms",
+        "evidenced_dispute_forms"
+      ]
     },
     {
       "id": "http-032",

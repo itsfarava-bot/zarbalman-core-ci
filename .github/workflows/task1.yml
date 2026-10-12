@@ -569,6 +569,8 @@ jobs:
 
         cp tests/support/Task4RemainingHarness.php .runtime/wp/task4-remaining-harness.php
 
+        cp tests/support/Task4RegistryHarness.php .runtime/wp/task4-registry-harness.php
+
         php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log
         2>&1 &
 
@@ -726,6 +728,8 @@ jobs:
         cp tests/support/Task4EndpointHarness.php .runtime/wp/task4-endpoint-harness.php
 
         cp tests/support/Task4RemainingHarness.php .runtime/wp/task4-remaining-harness.php
+
+        cp tests/support/Task4RegistryHarness.php .runtime/wp/task4-registry-harness.php
 
         php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log
         2>&1 &

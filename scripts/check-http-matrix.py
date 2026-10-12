@@ -96,8 +96,12 @@ def negative_ok(row):
     """
     if not isinstance(row, dict) or row.get('assertion_status', 'passed') != 'passed':
         return False
+    if row.get('generic_dispatcher_only') is True: return False
     observed = row.get('observed', row)
-    reason_text = str(observed.get('reason', '')).lower()
+    if not isinstance(observed, dict): return False
+    notice = observed.get('notice')
+    notice_message = notice.get('message') if isinstance(notice, dict) else None
+    reason_text = ' '.join(str(observed.get(key, '')) for key in ('reason', 'message', 'code')).lower()
     dispatcher = any(label in reason_text for label in (
         'dispatcher', 'no public', 'no handler', 'unregistered', 'nopriv',
         'default wordpress', 'generic wordpress',
@@ -106,10 +110,10 @@ def negative_ok(row):
         body = observed.get('body')
         if dispatcher or (isinstance(body, str) and body.strip() in ('', '0', 'wp_die')):
             return False
-        specific = [observed.get('message'), observed.get('code'), observed.get('notice', {}).get('message')]
+        specific = [observed.get('message'), observed.get('code'), notice_message]
         generic = {'', '0', '400', 'bad request', 'wordpress', 'wp_die', 'wp-die-message'}
         return any(isinstance(value, str) and value.strip().lower() not in generic for value in specific)
-    reason = observed.get('reason') or observed.get('message') or observed.get('notice', {}).get('message') or row.get('effect')
+    reason = observed.get('reason') or observed.get('message') or notice_message or row.get('effect')
     return bool(reason) and isinstance(observed.get('http'), int)
 
 
@@ -198,7 +202,13 @@ def check_remaining(endpoint, rows):
     gaps = []
     if not remaining_positive(endpoint, rows): gaps.append('positive-control')
     for scenario in NEGATIVES:
-        if not negative_ok(rows.get(scenario)): gaps.append('negative:' + scenario)
+        if endpoint == 'zbm_supplier_requests' and scenario in ('guest', 'wrong_role', 'other_buyer', 'other_vendor'):
+            # The real health gate runs before the role/ownership checks. Its
+            # paragraph proves the dependency control, not those later checks.
+            gaps.append('negative:blocked-by-dependency:' + scenario)
+        elif endpoint == 'zbm_create_purchase_request' and scenario in ('wrong_role', 'other_buyer', 'other_vendor') and rows.get(scenario, {}).get('reason') == 'zbm_request_dependencies_unavailable':
+            gaps.append('negative:blocked-by-dependency:' + scenario)
+        elif not negative_ok(rows.get(scenario)): gaps.append('negative:' + scenario)
     return gaps
 
 
@@ -321,11 +331,220 @@ def apply_payment_overlay(row, gaps, supplemental, junit):
     gaps = [gap for gap in gaps if not any(gap == endpoint + ':positive-control' for endpoint in endpoints)]
     na = {}
     for binding, record in zip(bindings, records):
-        for kind in ('role', 'nonce'):
-            contract = record.get(kind + '_contract')
-            if isinstance(contract, str) and contract.startswith('N/A:'):
-                na.setdefault(binding['endpoint'] + ':' + binding['scenario'], {})[kind] = contract
+        verified = [(binding['scenario'], record)]
+        if binding['endpoint'] == 'zbm_supplier_requests':
+            controls = supplemental.get(binding['file'], {}).get(binding['endpoint'], {})
+            verified.extend((scenario, controls[scenario]) for scenario in NEGATIVES
+                            if scenario in controls and payment_control(controls[scenario], binding, row['id'], junit))
+        for scenario, control in verified:
+            for kind in ('role', 'nonce'):
+                contract = control.get(kind + '_contract')
+                if kind == 'role' and binding['endpoint'] == 'zbm_supplier_requests':
+                    continue
+                if isinstance(contract, str) and contract.startswith('N/A:'):
+                    na.setdefault(binding['endpoint'] + ':' + scenario, {})[kind] = contract
     return gaps, na, 'confirmed-commercial-dependency-control'
+
+
+def form_control_base(control, binding, row_id, junit):
+    return supplemental_base(control, binding, row_id, junit) and snapshot_valid(control.get('before_snapshot')) and snapshot_valid(control.get('after_snapshot'))
+
+
+def form_positive(row_id, control, binding, junit):
+    if not form_control_base(control, binding, row_id, junit): return False
+    if control.get('actor_valid') is not True or control.get('financial_unchanged') is not True: return False
+    before, after = control['before_snapshot'], control['after_snapshot']
+    if set(before) != set(after): return False
+    if row_id == 'http-012':
+        references = control.get('observed_response', {}).get('returned_references')
+        return (control.get('type') == 'scoped-read' and control.get('http') == 200
+                and control.get('exact_scoped_data') is True and before == after
+                and isinstance(references, list) and len(references) == 1
+                and bool(re.fullmatch(r'[1-9][0-9]{5}', str(references[0])))
+                and str(control.get('nonce_contract', '')).startswith('N/A:'))
+    if control.get('type') != 'mutation' or control.get('nonce_valid') is not True or control.get('persisted_assertions') is not True or before == after: return False
+    if control.get('http') != 302: return False
+    if row_id == 'http-016':
+        return (control.get('actor') == 'admin' and control.get('verified_settings') is True
+                and control.get('before_options') != control.get('after_options')
+                and control.get('stored_templates') == {'request_rejected': 'Sandbox {request} message'}
+                and str(control.get('after_options', {}).get('zbm_core_delivery_reminder_minutes')) == str(control.get('stored_minutes'))
+                and all(before[key] == after[key] for key in before if not key.startswith('option:'))
+                and any(isinstance(notice, dict) and notice.get('code') == 'settings_updated' and notice.get('type') == 'success' for notice in (control.get('notice') or [])))
+    if row_id == 'http-013':
+        allowed = ('zbm_purchase_requests', 'zbm_audit_logs', 'zbm_notification_outbox')
+        return (control.get('actor') == 'admin' and control.get('is_paused') is True
+                and control.get('before_version') == 0 and control.get('after_version') == 1
+                and isinstance(control.get('notice'), dict) and control['notice'].get('type') == 'success'
+                and all(before[key] == after[key] for key in before if not key.endswith(allowed))
+                and all(any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in ('zbm_purchase_requests', 'zbm_audit_logs')))
+    if row_id == 'http-031':
+        allowed = ('zbm_workflows', 'zbm_audit_logs', 'zbm_idempotency_keys')
+        return (control.get('actor') == 'buyer_1' and control.get('result') == 'success'
+                and control.get('before_state') == 'deposit_pending' and control.get('after_state') == 'cancellation_requested'
+                and control.get('after_version', -1) > control.get('before_version', -1) >= 0
+                and all(before[key] == after[key] for key in before if not key.endswith(allowed))
+                and all(any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in ('zbm_workflows', 'zbm_audit_logs')))
+    return False
+
+
+def form_negative(row_id, scenario, control, binding, junit):
+    if not form_control_base(control, binding, row_id, junit): return False
+    if control.get('generic_dispatcher_only') is True: return False
+    if control.get('before_snapshot') != control.get('after_snapshot') or control.get('financial_unchanged') is not True: return False
+    if row_id in ('http-012', 'http-016'):
+        expected_status = 302 if scenario == 'guest' else (200 if row_id == 'http-012' and scenario in ('no_nonce', 'invalid_nonce') else 403)
+    elif row_id == 'http-013':
+        expected_status = 403 if scenario in ('no_nonce', 'invalid_nonce') else (400 if scenario == 'guest' else 500)
+    else:
+        expected_status = 403 if scenario in ('no_nonce', 'invalid_nonce') else (400 if scenario == 'guest' else 302)
+    if control.get('http') != expected_status: return False
+    if row_id == 'http-031' and scenario in ('wrong_role', 'other_buyer', 'other_vendor') and control.get('result') != 'forbidden': return False
+    if row_id == 'http-012' and scenario in ('no_nonce', 'invalid_nonce'):
+        return form_positive(row_id, control, binding, junit)
+    observed = dict(control)
+    response = control.get('observed_response', {})
+    observed.update({key: response[key] for key in ('message', 'code', 'notice') if key in response})
+    if response.get('result'):
+        observed['reason'] = response['result']
+    return negative_ok(observed)
+
+
+def apply_form_overlay(row, gaps, supplemental, junit):
+    binding = row['supplemental'][0]
+    record = supplemental.get(binding['file'], {}).get(binding['key'], {})
+    if not supplemental_base(record, binding, row['id'], junit): return gaps, {}, None
+    controls = record.get('controls', {})
+    positive = form_positive(row['id'], controls.get('authorized_positive', {}), binding, junit)
+    if row['id'] == 'http-016':
+        for scenario, minutes in (('zero_disabled', 0), ('minimum_five', 5), ('maximum_1440', 1440)):
+            control = controls.get(scenario, {})
+            positive = positive and form_positive(row['id'], control, binding, junit) and control.get('stored_minutes') == minutes
+        positive = positive and controls.get('authorized_positive', {}).get('stored_minutes') == 120
+    gaps = [gap for gap in gaps if not gap.startswith('positive-and-negative-controls:')]
+    if not positive: gaps.append('positive:form-contract')
+    na = {}
+    for scenario in NEGATIVES:
+        control = controls.get(scenario, {})
+        if not form_negative(row['id'], scenario, control, binding, junit): gaps.append('negative:form:' + scenario)
+        elif scenario in ('no_nonce', 'invalid_nonce') and str(control.get('nonce_contract', '')).startswith('N/A:'):
+            na['form:' + scenario] = {'nonce': control['nonce_contract']}
+    # A passing pause/cancellation submission proves its actual branch only.
+    expected_branches = row.get('branches', [])
+    verified_operation = {'http-013': 'pause', 'http-031': 'buyer_cancellation_requested'}.get(row['id'])
+    covered = [verified_operation] if positive and verified_operation in record.get('covered_operations', []) else []
+    for branch in expected_branches:
+        if branch not in covered: gaps.append('branch:' + branch)
+    return gaps, na, 'actual-form-scoped-read' if row['id'] == 'http-012' else 'actual-form-durable-mutation'
+
+
+def legacy_snapshot_valid(control):
+    before, after = control.get('before_snapshot'), control.get('after_snapshot')
+    required = ('zbm_dokan_credit_mirrors', 'zbm_managed_case_commands', 'posts', 'postmeta',
+                'woocommerce_order_items', 'woocommerce_order_itemmeta')
+    return (snapshot_valid(before) and snapshot_valid(after) and set(before) == set(after)
+            and all(any(key.endswith('_' + suffix) for key in before) for suffix in required))
+
+
+def legacy_recovery_positive(control, binding, junit):
+    if not form_control_base(control, binding, 'http-015', junit) or not legacy_snapshot_valid(control): return False
+    before, after = control['before_snapshot'], control['after_snapshot']
+    allowed = ('zbm_purchase_requests', 'zbm_audit_logs', 'zbm_idempotency_keys', 'zbm_notification_outbox',
+               'posts', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta',
+               'wc_orders', 'wc_order_addresses', 'wc_order_operational_data', 'wc_orders_meta')
+    if any(before[key] != after[key] for key in before if not key.endswith(tuple('_' + suffix for suffix in allowed))): return False
+    if not all(any(key.endswith('_' + suffix) and before[key] != after[key] for key in before)
+               for suffix in ('zbm_purchase_requests', 'zbm_audit_logs', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta')): return False
+    order = control.get('order_contract', {})
+    stock = control.get('stock_contract', {})
+    audit = control.get('audit_contract', {})
+    return (control.get('type') == 'mutation' and control.get('http') == 302
+            and control.get('actor') == 'admin'
+            and all(control.get(key) is True for key in ('actor_valid', 'nonce_valid', 'key_valid', 'persisted_assertions', 'financial_unchanged'))
+            and control.get('before_state') == 'supplier_accepted' and control.get('after_state') == 'deposit_paid'
+            and control.get('before_version') == 0 and control.get('after_version') == 1
+            and control.get('before_execution_mode') == 'test_pending' and control.get('execution_mode') == 'test'
+            and control.get('submitted_version') == 0 and control.get('reason_present') is True
+            and control.get('payment_ready') is False and control.get('payment_count') == control.get('ledger_count') == 0
+            and isinstance(control.get('notice'), dict) and control['notice'].get('type') == 'success' and bool(control['notice'].get('message'))
+            and isinstance(order.get('order_id'), int) and order['order_id'] > 0
+            and order.get('snapshot_matches') is True and order.get('route') == order.get('execution_mode') == 'test'
+            and order.get('payment_enabled') == 'no' and order.get('status') == 'pending'
+            and order.get('is_paid') is False and 'paid_at' in order and order['paid_at'] is None
+            and order.get('transaction_id') == '' and order.get('line_item_count') == 1
+            and order.get('other_orders_unchanged') is True and order.get('other_requests_unchanged') is True
+            and stock.get('before') == 100 and stock.get('after') == 99 and stock.get('reduced_stock') == 1
+            and stock.get('request_reserved') is True and stock.get('request_released') is False
+            and audit.get('event') == 'admin_test_deposit_advanced' and audit.get('count') == 1
+            and audit.get('actor_type') == 'admin' and audit.get('actor_user_id', 0) > 0 and audit.get('reason_matches') is True)
+
+
+def legacy_identity_safety(control, binding, junit):
+    if not form_control_base(control, binding, 'http-014', junit) or not legacy_snapshot_valid(control): return False
+    identity = control.get('identity_contract', {})
+    notice = control.get('notice', {})
+    if not isinstance(identity, dict) or not isinstance(notice, dict): return False
+    return (control.get('type') == 'validation' and control.get('http') == 302
+            and control.get('actor') == 'admin'
+            and all(control.get(key) is True for key in ('actor_valid', 'nonce_valid', 'stored_binding_valid', 'persisted_assertions', 'financial_unchanged', 'identity_guard_before_verifier'))
+            and control.get('before_snapshot') == control.get('after_snapshot')
+            and control.get('before_state') == control.get('after_state') == 'late_payment_review'
+            and control.get('before_version') == control.get('after_version') == 0
+            and notice.get('type') == 'error' and bool(notice.get('message'))
+            and identity.get('snapshot_matches') is True and identity.get('authority_matches') is True
+            and identity.get('route') == 'online' and identity.get('execution_mode') == 'live'
+            and identity.get('payment_status') == 'callback_received_late'
+            and all(key in identity and identity[key] is None for key in ('paid_amount', 'reference', 'paid_at'))
+            and control.get('provider_verification_verified') is False and control.get('dependency_control_claimed') is False)
+
+
+def legacy_recovery_negative(scenario, control, binding, junit):
+    if not form_control_base(control, binding, 'http-015', junit) or not legacy_snapshot_valid(control): return False
+    actors = {'guest': 'guest', 'wrong_role': 'buyer_1', 'other_buyer': 'buyer_2', 'other_vendor': 'vendor_2'}
+    if control.get('actor') != actors.get(scenario, 'admin'): return False
+    if control.get('generic_dispatcher_only') is True: return False
+    if control.get('submitted_version') != (9 if scenario == 'stale_version' else 0): return False
+    if control.get('reason_present') is not (scenario != 'missing_reason'): return False
+    if scenario != 'guest' and control.get('nonce_valid') is not (scenario not in ('no_nonce', 'invalid_nonce')): return False
+    status = 400 if scenario == 'guest' else (500 if scenario in actors else (403 if scenario in ('no_nonce', 'invalid_nonce') else 302))
+    if control.get('http') != status or control.get('financial_unchanged') is not True: return False
+    if control['before_snapshot'] != control['after_snapshot']: return False
+    if control.get('after_state') != 'supplier_accepted' or control.get('after_version') != 0 or control.get('execution_mode') != 'test_pending': return False
+    notice = control.get('notice')
+    if scenario in ('missing_reason', 'stale_version') and (not isinstance(notice, dict) or notice.get('type') != 'error'): return False
+    return negative_ok(control)
+
+
+def apply_legacy_form_overlay(row, gaps, supplemental, junit):
+    binding = row['supplemental'][0]
+    record = supplemental.get(binding['file'], {}).get(binding['key'], {})
+    if not supplemental_base(record, binding, row['id'], junit): return gaps, {}, None
+    controls = record.get('controls', {})
+    gaps = [gap for gap in gaps if not gap.startswith('positive-and-negative-controls:')]
+    if row['id'] == 'http-014':
+        # The valid issued identity is denied before provider verification. It
+        # proves preservation only, never cancellation or a dependency exemption.
+        safety = legacy_identity_safety(controls.get('authorized_identity_safety_control', {}), binding, junit)
+        gaps.append('positive:form-contract')
+        gaps.extend('negative:form:' + scenario for scenario in NEGATIVES)
+        gaps.append('branch:cancel_review')
+        if not safety: gaps.append('safety:identity-guard')
+        return gaps, {}, 'actual-form-identity-safety-denial' if safety else None
+    positive = legacy_recovery_positive(controls.get('authorized_positive', {}), binding, junit)
+    if not positive: gaps.append('positive:form-contract')
+    for scenario in row['required_scenarios']:
+        if not legacy_recovery_negative(scenario, controls.get(scenario, {}), binding, junit):
+            gaps.append('negative:form:' + scenario)
+    if not positive or 'test_advance' not in record.get('covered_operations', []): gaps.append('branch:test_advance')
+    return gaps, {}, 'actual-form-quarantined-test-recovery' if positive else None
+
+
+def apply_supplemental_overlay(row, gaps, supplemental, junit):
+    if row.get('supplemental') and row['supplemental'][0].get('format') == 'legacy-form':
+        return apply_legacy_form_overlay(row, gaps, supplemental, junit)
+    if row.get('supplemental') and row['supplemental'][0].get('format') == 'form':
+        return apply_form_overlay(row, gaps, supplemental, junit)
+    return apply_payment_overlay(row, gaps, supplemental, junit)
 
 
 def evaluate(catalog, registration, remaining, additional, managed, junit, supplemental=None):
@@ -336,6 +555,7 @@ def evaluate(catalog, registration, remaining, additional, managed, junit, suppl
         not_applicable = {}
         runtime = registration.get('rows', {}).get(row['id'], {})
         if runtime.get('registered') is not True: gaps.append('registration')
+        if runtime.get('actual_http') is not True or runtime.get('runtime') != 'authenticated-http': gaps.append('registration-runtime')
         if not junit_pass(junit, 'RegisteredHttpSurfacesTest::test_production_surface_callback_is_actually_registered', row['id']): gaps.append('registration-junit')
         contract = row['coverage']
         if contract['type'] == 'form-contract':
@@ -357,17 +577,32 @@ def evaluate(catalog, registration, remaining, additional, managed, junit, suppl
                         not_applicable.update(not_applicable_contracts(endpoint, controls))
             elif contract['type'] == 'additional': gaps.extend(additional_controls(contract, additional))
             else: gaps.append('unknown-contract')
-        gaps, supplemental_na, positive_kind = apply_payment_overlay(row, gaps, supplemental, junit)
+        gaps, supplemental_na, positive_kind = apply_supplemental_overlay(row, gaps, supplemental, junit)
         not_applicable.update(supplemental_na)
         positive_gaps = [gap for gap in gaps if gap.startswith(('positive:', 'positive-and-negative-controls:', 'junit')) or ':positive-control' in gap or gap == 'scenario-incomplete']
         negative_gaps = [gap for gap in gaps if gap.startswith(('negative:', 'positive-and-negative-controls:', 'junit')) or ':negative:' in gap or gap == 'scenario-incomplete']
         output.append({'id': row['id'], 'kind': row['kind'], 'registered': runtime.get('registered') is True,
+                       'registration_control_complete': not any(gap.startswith('registration') for gap in gaps),
                        'positive_control_complete': not positive_gaps,
-                       'supplemental_positive_kind': positive_kind,
+                       'supplemental_positive_kind': None if positive_kind == 'actual-form-identity-safety-denial' else positive_kind,
+                       'supplemental_safety_control_complete': positive_kind == 'actual-form-identity-safety-denial',
                        'negative_controls_complete': not negative_gaps,
+                       'branch_coverage_complete': not any(gap.startswith('branch:') for gap in gaps),
+                       'dependency_blocked_controls': [gap for gap in gaps if ':blocked-by-dependency:' in gap],
                        'not_applicable_controls': not_applicable,
                        'positive_and_negative_complete': not gaps, 'gaps': gaps})
     return output
+
+
+def load_supplemental(path, started, environment=None):
+    environment = os.environ if environment is None else environment
+    if path.stat().st_mtime_ns < started:
+        return {}, 'stale-supplemental-evidence:' + path.name
+    data = json.loads(path.read_text())
+    meta = data.get('_meta', {})
+    if meta.get('schema_version') != 1 or any(str(meta.get(key)) != environment.get(env, 'local') for key, env in (('run_id', 'GITHUB_RUN_ID'), ('run_attempt', 'GITHUB_RUN_ATTEMPT'))):
+        return {}, 'supplemental-run-mismatch:' + path.name
+    return data, None
 
 
 def main():
@@ -399,17 +634,13 @@ def main():
         supplemental = {}
         for name in sorted({binding['file'] for row in catalog['rows'] for binding in row.get('supplemental', [])}):
             path = evidence / name
-            if path.stat().st_mtime_ns < started:
-                report['errors'].append('stale-supplemental-evidence:' + name)
-                continue
-            data = json.loads(path.read_text())
-            meta = data.get('_meta', {})
-            if meta.get('schema_version') != 1 or any(str(meta.get(key)) != os.environ.get(env, 'local') for key, env in (('run_id', 'GITHUB_RUN_ID'), ('run_attempt', 'GITHUB_RUN_ATTEMPT'))):
-                report['errors'].append('supplemental-run-mismatch:' + name)
+            data, error = load_supplemental(path, started)
+            if error:
+                report['errors'].append(error)
                 continue
             supplemental[name] = data
         report['rows'] = evaluate(catalog, *loaded, junit_results(junit_path), supplemental)
-    except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError, ET.ParseError) as error:
         report['errors'].append(type(error).__name__ + ':' + str(error))
     failed = sum(not row['positive_and_negative_complete'] for row in report['rows'])
     report['summary'] = {'rows': len(report['rows']), 'failed': failed, 'errors': len(report['errors'])}

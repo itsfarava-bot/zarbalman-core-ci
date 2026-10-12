@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Task4ManagedFixture.php';
+require_once __DIR__ . '/Task4EndpointHttp.php';
 
 use PHPUnit\Framework\Assert;
 use Zarbalman\Core\Application\BalancePaymentService;
@@ -42,6 +43,19 @@ final class PaymentEndpointFixture {
         $this->cases = self::property($this->service, 'cases');
         $this->health = self::property($this->service, 'health');
         Assert::assertNull(Migrator::financeAvailabilityError(), 'Finance migrations must not explain not_payable.');
+        // Complete the real first-install admin bootstrap before fixture HTTP writes.
+        // This is the same bounded, local preflight used by the HPOS form test;
+        // no Dokan onboarding option or compatibility flag is fabricated.
+        [$adminCookie] = CandidateHttp::auth(Task4ManagedFixture::users()['admin'], 'unused-payment-admin-bootstrap');
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            $initial = Task4EndpointHttp::get('wp-admin/index.php', [], $adminCookie);
+            if ($initial['status'] === 200) { break; }
+            Assert::assertSame(302, $initial['status']);
+            $location = Task4EndpointHttp::header($initial, 'Location');
+            Assert::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+            Assert::assertStringStartsWith('/wp-admin/', (string) parse_url($location, PHP_URL_PATH));
+        }
+        Assert::assertSame(200, Task4EndpointHttp::get('wp-admin/index.php', [], $adminCookie)['status']);
         $this->managed = new Task4ManagedFixture('spec4_create_refund');
         $this->contract();
     }

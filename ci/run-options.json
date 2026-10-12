@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "LegacyNotificationSettingTest|PaymentEndpointControlsTest|RegisteredHttpSurfacesTest"
+  "filter": "LegacyNotificationSettingTest|PaymentEndpointControlsTest|EndpointFormControlsTest|LegacyRequestFormControlsTest|RegisteredHttpSurfacesTest"
 }

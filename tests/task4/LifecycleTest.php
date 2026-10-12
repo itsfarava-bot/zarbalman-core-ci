@@ -84,12 +84,20 @@ final class LifecycleTest extends TestCase {
         self::assertSame(200, $http['status']); $result = json_decode($http['body'], true, 32, JSON_THROW_ON_ERROR);
         file_put_contents(__DIR__ . '/../../evidence/task4-reactivation.json', wp_json_encode(['before' => $before, 'after' => $store->snapshot($id), 'sweep' => $result]));
         $afterSweepRows = $requestRows();
+        $financeAfter = CandidateFixture::financialSnapshot();
+        $financeChanges = [];
+        foreach ($finance as $table => $hash) {
+            if ($hash !== ($financeAfter[$table] ?? null)) {
+                $financeChanges[] = ['table' => $table, 'before_hash' => $hash, 'after_hash' => $financeAfter[$table] ?? null];
+            }
+        }
         file_put_contents(__DIR__ . '/../../evidence/task4-lifecycle-columns.json', wp_json_encode([
             'overdue_order_id' => $id,
             'request_ids_before' => array_map('intval', array_keys($beforeDeactivateRows)),
             'deactivate' => $columns($beforeDeactivateRows, $afterDeactivateRows),
             'activate' => $columns($beforeActivateRows, $afterActivateRows),
             'sweep' => $columns($afterActivateRows, $afterSweepRows),
+            'financial_snapshot_changed_tables' => $financeChanges,
         ], JSON_PRETTY_PRINT));
         self::assertTrue($result['registered']); self::assertTrue($result['scheduled']);
         self::assertSame('admin_review', $store->snapshot($id)['state']); self::assertSame($before['version'] + 1, $store->snapshot($id)['version']);

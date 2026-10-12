@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -16,7 +17,7 @@ class HttpMatrixTest(unittest.TestCase):
     def setUp(self):
         self.row = {'id': 'http-001', 'kind': 'action', 'coverage': {'type': 'remaining', 'test': 'RemainingEndpointsTest::test_real', 'keys': ['zbm_finance_destination']}}
         self.catalog = {'rows': [self.row]}
-        self.registered = {'rows': {'http-001': {'registered': True}}}
+        self.registered = {'rows': {'http-001': {'registered': True, 'actual_http': True, 'runtime': 'authenticated-http'}}}
         self.junit = {('RemainingEndpointsTest', 'test_real'): True, ('RegisteredHttpSurfacesTest', 'test_production_surface_callback_is_actually_registered with data set "http-001"'): True}
         denial = {'assertion_status': 'passed', 'http': 403, 'effect': 'denied-no-persisted-effect', 'reason': 'exact finance denial'}
         self.controls = {key: copy.deepcopy(denial) for key in M.NEGATIVES}
@@ -31,6 +32,10 @@ class HttpMatrixTest(unittest.TestCase):
     def test_missing_registration_fails_even_with_passing_http_test(self):
         self.registered['rows']['http-001']['registered'] = False
         self.assertIn('registration', self.evaluate()['gaps'])
+
+    def test_cli_registration_boolean_is_not_actual_http_registration_proof(self):
+        del self.registered['rows']['http-001']['actual_http']
+        self.assertIn('registration-runtime', self.evaluate()['gaps'])
 
     def test_missing_registered_callback_junit_is_not_proof(self):
         del self.junit[('RegisteredHttpSurfacesTest', 'test_production_surface_callback_is_actually_registered with data set "http-001"')]
@@ -59,6 +64,14 @@ class HttpMatrixTest(unittest.TestCase):
         self.assertFalse(M.negative_ok({'assertion_status': 'passed', 'http': 400, 'reason': 'WordPress dispatcher: no public handler', 'message': 'claimed denial'}))
         self.assertFalse(M.negative_ok({'assertion_status': 'passed', 'http': 400, 'body': '0', 'code': 'claimed_denial'}))
         self.assertFalse(M.negative_ok({'assertion_status': 'passed', 'http': 400, 'message': 'Bad Request'}))
+
+    def test_none_list_and_bare_notice_do_not_crash_or_turn_400_into_named_denial(self):
+        for notice in (None, [], [{'message': 'a claim outside response contract'}], {}):
+            with self.subTest(notice=notice):
+                self.assertFalse(M.negative_ok({'http': 400, 'notice': notice, 'effect': 'claimed validation'}))
+                self.assertTrue(M.negative_ok({'http': 403, 'notice': notice, 'message': 'actual named capability denial'}))
+                self.assertFalse(M.negative_ok({'notice': notice, 'message': 'missing HTTP result'}))
+        self.assertFalse(M.negative_ok({'http': 400}))
 
     def test_public_read_and_provider_callback_expose_tested_na_contracts(self):
         control = {'assertion_status': 'passed', 'http': 200, 'effect': 'allowed scoped read', 'nonce_contract': 'N/A: no form nonce by public read contract'}
@@ -134,6 +147,317 @@ class HttpMatrixTest(unittest.TestCase):
             self.assertNotEqual(before, M.discover(root))
             file.write_text('')
             self.assertEqual([], M.discover(root))
+
+    def payment_record(self):
+        catalog = json.loads((ROOT / 'ci/http-surfaces.json').read_text())
+        row = next(row for row in catalog['rows'] if row['id'] == 'http-033')
+        binding = row['supplemental'][0]
+        snapshot = {'wp_' + suffix: ('a' * 64) for suffix in ('zbm_managed_cases', 'zbm_payments', 'zbm_ledger_entries', 'zbm_financial_actions', 'zbm_purchase_requests', 'zbm_audit_logs')}
+        health = {'currency': {'ok': True, 'detected': 'IRT'}}
+        health['zarinpal_version'] = {'label': 'Secure Zarinpal', 'detected': '', 'expected': '5.0.17', 'ok': False, 'scope': 'payment'}
+        health['zarinpal_settings'] = {'label': 'Gateway settings', 'detected': 'unavailable', 'expected': 'enabled real provider credentials', 'ok': False, 'scope': 'payment'}
+        fixture = {key: True for key in ('live', 'owned', 'delivered', 'final_locked', 'deposit_verified', 'spec4_valid', 'payable')}
+        fixture.update({key: False for key in ('paused', 'reconciliation_required', 'manual_balance')})
+        fixture.update(state='balance_due', substate='balance_due', total_toman=1000, deposit_toman=100, balance_toman=0, remaining_toman=900)
+        record = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True, 'test': binding['test'], 'catalog_ids': ['http-033', 'http-061'], 'type': 'dependency', 'http': 303, 'fixture_contract': fixture, 'online_available': False, 'provider_issuance_verified': False, 'notice': {'type': 'error', 'message': 'Actual provider unavailable'}, 'dependency_report': health, 'missing_dependencies': {key: health[key] for key in ('zarinpal_version', 'zarinpal_settings')}, 'before_snapshot': snapshot, 'after_snapshot': copy.deepcopy(snapshot)}
+        record.update({key: True for key in ('actor_valid', 'key_valid', 'nonce_valid', 'financial_unchanged', 'case_unchanged', 'audit_unchanged')})
+        cls, method = binding['test'].split('::')
+        return row, binding, record, {(cls, method): True}
+
+    def test_confirmed_gateway_dependency_overlay_preserves_generic_guest_400_gap(self):
+        row, binding, record, junit = self.payment_record()
+        self.assertTrue(M.payment_control(record, binding, row['id'], junit))
+        gaps = ['zbm_balance_start:positive-control', 'zbm_balance_start:negative:guest']
+        remaining, na, kind = M.apply_payment_overlay(row, gaps, {'http-payment-controls.json': {'zbm_balance_start': {'authorized_dependency_control': record}}}, junit)
+        self.assertEqual(['zbm_balance_start:negative:guest'], remaining)
+        self.assertEqual('confirmed-commercial-dependency-control', kind)
+
+    def test_bogus_or_synthetic_dependency_overlay_is_rejected(self):
+        row, binding, record, junit = self.payment_record()
+        record['synthetic_dependency'] = True
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+        del record['synthetic_dependency']
+        record['missing_dependencies'] = {'fake_gateway': {'ok': False}}
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+
+    def test_unpayable_or_unobserved_dependency_overlay_is_rejected(self):
+        row, binding, record, junit = self.payment_record()
+        record['fixture_contract']['payable'] = False
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+        record['fixture_contract']['payable'] = True
+        record['actual_http'] = False
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+        record['actual_http'] = True
+        self.assertFalse(M.payment_control(record, binding, row['id'], {}))
+
+    def test_callback_review_proof_requires_durable_audit_and_zero_credit(self):
+        _, _, base, _ = self.payment_record()
+        catalog = json.loads((ROOT / 'ci/http-surfaces.json').read_text())
+        row = next(row for row in catalog['rows'] if row['id'] == 'http-034')
+        binding = row['supplemental'][0]
+        before = base['before_snapshot']
+        after = copy.deepcopy(before)
+        for suffix in ('zbm_payments', 'zbm_managed_cases', 'zbm_audit_logs'):
+            after['wp_' + suffix] = 'b' * 64
+        record = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True,
+                  'test': binding['test'], 'catalog_ids': ['http-034'], 'type': 'dependency', 'http': 303,
+                  'stored_binding_valid': True, 'callback_observed': True, 'amounts_and_ledger_unchanged': True,
+                  'provider_credentials_configured': False, 'provider_verified': False, 'outbound_attempted': False,
+                  'provider_prerequisite_error': 'Provider verification settings unavailable.',
+                  'before_version': 1, 'after_version': 3, 'after_state': 'admin_review', 'substate': 'payment_review',
+                  'payment_status': 'verification_pending', 'balance_toman': 0, 'remaining_toman': 900,
+                  'audit_events': ['spec4_callback_received', 'spec4_payment_review'],
+                  'dependency_report': base['dependency_report'], 'missing_dependencies': base['missing_dependencies'],
+                  'before_snapshot': before, 'after_snapshot': after}
+        cls, method = binding['test'].split('::')
+        junit = {(cls, method): True}
+        self.assertTrue(M.payment_control(record, binding, row['id'], junit))
+        record['balance_toman'] = 900
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+        record['balance_toman'] = 0
+        record['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+        record['after_snapshot']['wp_zbm_ledger_entries'] = before['wp_zbm_ledger_entries']
+        record['audit_events'] = []
+        self.assertFalse(M.payment_control(record, binding, row['id'], junit))
+
+    def form_record(self, row_id='http-013'):
+        _, _, payment, _ = self.payment_record()
+        catalog = json.loads((ROOT / 'ci/http-surfaces.json').read_text())
+        row = next(row for row in catalog['rows'] if row['id'] == row_id)
+        binding = row['supplemental'][0]
+        before = copy.deepcopy(payment['before_snapshot'])
+        after = copy.deepcopy(before)
+        if row_id == 'http-013':
+            after['wp_zbm_purchase_requests'] = 'b' * 64
+            after['wp_zbm_audit_logs'] = 'b' * 64
+        record = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True,
+                  'test': binding['test'], 'catalog_ids': [row_id], 'covered_operations': ['pause'], 'controls': {}}
+        positive = {key: record[key] for key in ('state', 'assertion_status', 'actual_http', 'test', 'catalog_ids')}
+        positive.update(type='mutation', http=302, actor='admin', actor_valid=True, nonce_valid=True,
+                        persisted_assertions=True, financial_unchanged=True, before_snapshot=before, after_snapshot=after,
+                        before_version=0, after_version=1, is_paused=True, notice={'type': 'success', 'message': 'pause persisted'})
+        record['controls']['authorized_positive'] = positive
+        cls, method = binding['test'].split('::')
+        return row, binding, record, {(cls, method): True}
+
+    def test_actual_pause_form_does_not_claim_other_declared_state_branches(self):
+        row, binding, record, junit = self.form_record()
+        self.assertTrue(M.form_positive(row['id'], record['controls']['authorized_positive'], binding, junit))
+        record['covered_operations'] = row['branches']
+        gaps, _, kind = M.apply_form_overlay(row, ['positive-and-negative-controls:purchase-request-state-control'], {'http-form-controls.json': {row['id']: record}}, junit)
+        self.assertIn('branch:resume', gaps)
+        self.assertIn('branch:accept_late', gaps)
+        self.assertNotIn('branch:pause', gaps)
+        self.assertEqual('actual-form-durable-mutation', kind)
+
+    def test_form_guest_renderer_does_not_replace_generic_post_dispatcher_400(self):
+        row, binding, record, junit = self.form_record()
+        control = copy.deepcopy(record['controls']['authorized_positive'])
+        control.update(type='validation', http=400, generic_dispatcher_only=True, message='dispatcher_no_public_handler')
+        control['after_snapshot'] = copy.deepcopy(control['before_snapshot'])
+        control['observed_response'] = {'message': 'dispatcher_no_public_handler', 'renderer_denial': 'exact_guest_denial'}
+        self.assertFalse(M.form_negative(row['id'], 'guest', control, binding, junit))
+
+    def test_pause_boolean_without_actual_request_and_audit_changes_does_not_qualify(self):
+        row, binding, record, junit = self.form_record()
+        record['controls']['authorized_positive']['after_snapshot'] = copy.deepcopy(record['controls']['authorized_positive']['before_snapshot'])
+        record['controls']['authorized_positive']['after_snapshot']['wp_zbm_notification_outbox'] = 'b' * 64
+        self.assertFalse(M.form_positive(row['id'], record['controls']['authorized_positive'], binding, junit))
+
+    def test_exact_scoped_get_form_read_requires_actual_returned_reference(self):
+        row, binding, record, junit = self.form_record('http-012')
+        control = record['controls']['authorized_positive']
+        control.update(type='scoped-read', http=200, exact_scoped_data=True, nonce_contract='N/A: admin GET read')
+        control['after_snapshot'] = copy.deepcopy(control['before_snapshot'])
+        control['observed_response'] = {'returned_references': ['654321']}
+        self.assertTrue(M.form_positive(row['id'], control, binding, junit))
+        control['observed_response']['returned_references'] = []
+        self.assertFalse(M.form_positive(row['id'], control, binding, junit))
+
+    def test_supplier_and_create_dependency_gate_do_not_prove_later_role_checks(self):
+        public = {'assertion_status': 'passed', 'http': 200, 'effect': 'same early health paragraph', 'nonce_contract': 'N/A: read-only shortcode'}
+        supplier = {key: copy.deepcopy(public) for key in M.NEGATIVES}
+        gaps = M.check_remaining('zbm_supplier_requests', supplier)
+        for scenario in ('guest', 'wrong_role', 'other_buyer', 'other_vendor'):
+            self.assertIn('negative:blocked-by-dependency:' + scenario, gaps)
+        create = {key: {'assertion_status': 'passed', 'http': 303, 'reason': 'zbm_request_dependencies_unavailable'} for key in M.NEGATIVES}
+        gaps = M.check_remaining('zbm_create_purchase_request', create)
+        self.assertIn('negative:blocked-by-dependency:wrong_role', gaps)
+
+    def legacy_record(self, row_id='http-015'):
+        _, _, payment, _ = self.payment_record()
+        catalog = json.loads((ROOT / 'ci/http-surfaces.json').read_text())
+        row = next(row for row in catalog['rows'] if row['id'] == row_id)
+        binding = row['supplemental'][0]
+        before = copy.deepcopy(payment['before_snapshot'])
+        for suffix in ('zbm_dokan_credit_mirrors', 'zbm_managed_case_commands', 'posts', 'postmeta',
+                       'woocommerce_order_items', 'woocommerce_order_itemmeta'):
+            before['wp_' + suffix] = 'a' * 64
+        control = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True,
+                   'test': binding['test'], 'catalog_ids': [row_id], 'type': 'mutation', 'http': 302,
+                   'actor': 'admin', 'actor_valid': True, 'nonce_valid': True, 'key_valid': True,
+                   'persisted_assertions': True, 'financial_unchanged': True, 'before_snapshot': before,
+                   'after_snapshot': copy.deepcopy(before), 'before_state': 'supplier_accepted',
+                   'after_state': 'deposit_paid', 'before_version': 0, 'after_version': 1,
+                   'before_execution_mode': 'test_pending', 'execution_mode': 'test',
+                   'payment_ready': False, 'payment_count': 0, 'ledger_count': 0,
+                   'submitted_version': 0, 'reason_present': True,
+                   'notice': {'type': 'success', 'message': 'actual persisted recovery'},
+                   'order_contract': {'order_id': 123, 'snapshot_matches': True, 'route': 'test',
+                       'execution_mode': 'test', 'payment_enabled': 'no', 'status': 'pending',
+                       'is_paid': False, 'paid_at': None, 'transaction_id': '', 'line_item_count': 1,
+                       'other_orders_unchanged': True, 'other_requests_unchanged': True},
+                   'stock_contract': {'before': 100, 'after': 99, 'reduced_stock': 1,
+                       'request_reserved': True, 'request_released': False},
+                   'audit_contract': {'event': 'admin_test_deposit_advanced', 'count': 1,
+                       'actor_type': 'admin', 'actor_user_id': 1, 'reason_matches': True}}
+        if row_id == 'http-015':
+            for suffix in ('zbm_purchase_requests', 'zbm_audit_logs', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta'):
+                control['after_snapshot']['wp_' + suffix] = 'b' * 64
+        else:
+            control.update(type='validation', stored_binding_valid=True, identity_guard_before_verifier=True,
+                           before_state='late_payment_review', after_state='late_payment_review', after_version=0,
+                           notice={'type': 'error', 'message': 'issued identity prevents cancellation'},
+                           provider_verification_verified=False, dependency_control_claimed=False,
+                           identity_contract={'snapshot_matches': True, 'route': 'online', 'execution_mode': 'live',
+                               'authority_matches': True, 'payment_status': 'callback_received_late',
+                               'paid_amount': None, 'reference': None, 'paid_at': None})
+        record = {key: control[key] for key in ('state', 'assertion_status', 'actual_http', 'test', 'catalog_ids')}
+        record['controls'] = {'authorized_positive' if row_id == 'http-015' else 'authorized_identity_safety_control': control}
+        record['covered_operations'] = ['test_advance'] if row_id == 'http-015' else ['cancel_review_identity_safety_denial']
+        cls, method = binding['test'].split('::')
+        return row, binding, record, {(cls, method): True}
+
+    def legacy_negative(self, control, scenario):
+        result = copy.deepcopy(control)
+        result.update(type='validation', after_state='supplier_accepted', after_version=0, execution_mode='test_pending',
+                      after_snapshot=copy.deepcopy(control['before_snapshot']), reason='specific observed validation denial',
+                      actor={'guest': 'guest', 'wrong_role': 'buyer_1', 'other_buyer': 'buyer_2', 'other_vendor': 'vendor_2'}.get(scenario, 'admin'),
+                      nonce_valid=scenario not in ('guest', 'no_nonce', 'invalid_nonce'),
+                      submitted_version=9 if scenario == 'stale_version' else 0, reason_present=scenario != 'missing_reason',
+                      http=400 if scenario == 'guest' else (500 if scenario in ('wrong_role', 'other_buyer', 'other_vendor') else (403 if scenario in ('no_nonce', 'invalid_nonce') else 302)),
+                      notice={'type': 'error', 'message': 'actual named denial'})
+        if scenario == 'guest': result.update(generic_dispatcher_only=True, body='0')
+        return result
+
+    def test_legacy_recovery_proves_quarantined_order_and_keeps_generic_guest_red(self):
+        row, binding, record, junit = self.legacy_record()
+        positive = record['controls']['authorized_positive']
+        self.assertTrue(M.legacy_recovery_positive(positive, binding, junit))
+        for scenario in row['required_scenarios']:
+            record['controls'][scenario] = self.legacy_negative(positive, scenario)
+        gaps, na, kind = M.apply_legacy_form_overlay(row, ['positive-and-negative-controls:legacy'], {binding['file']: {row['id']: record}}, junit)
+        self.assertEqual(['negative:form:guest'], gaps)
+        self.assertEqual({}, na)
+        self.assertEqual('actual-form-quarantined-test-recovery', kind)
+
+    def test_legacy_recovery_rejects_missing_stock_order_audit_or_zero_money_proof(self):
+        row, binding, record, junit = self.legacy_record()
+        control = record['controls']['authorized_positive']
+        for key in ('order_contract', 'stock_contract', 'audit_contract', 'payment_count', 'ledger_count', 'payment_ready'):
+            bad = copy.deepcopy(control)
+            del bad[key]
+            with self.subTest(missing=key): self.assertFalse(M.legacy_recovery_positive(bad, binding, junit))
+        for key, value in (('is_paid', True), ('route', 'online'), ('transaction_id', 'credited')):
+            bad = copy.deepcopy(control); bad['order_contract'][key] = value
+            with self.subTest(order=key): self.assertFalse(M.legacy_recovery_positive(bad, binding, junit))
+        bad = copy.deepcopy(control); bad['stock_contract']['after'] = 98
+        self.assertFalse(M.legacy_recovery_positive(bad, binding, junit))
+
+    def test_legacy_recovery_rejects_changed_ledger_dokan_credit_or_case(self):
+        row, binding, record, junit = self.legacy_record()
+        control = record['controls']['authorized_positive']
+        for suffix in ('zbm_ledger_entries', 'zbm_payments', 'zbm_financial_actions', 'zbm_dokan_credit_mirrors', 'zbm_managed_cases', 'zbm_managed_case_commands'):
+            bad = copy.deepcopy(control); bad['after_snapshot']['wp_' + suffix] = 'b' * 64
+            with self.subTest(table=suffix): self.assertFalse(M.legacy_recovery_positive(bad, binding, junit))
+        bad = copy.deepcopy(control); bad['after_snapshot'] = copy.deepcopy(bad['before_snapshot'])
+        self.assertFalse(M.legacy_recovery_positive(bad, binding, junit))
+
+    def test_legacy_controls_require_actual_http_unmocked_and_passing_same_test_junit(self):
+        for row_id in ('http-014', 'http-015'):
+            row, binding, record, junit = self.legacy_record(row_id)
+            control = next(iter(record['controls'].values()))
+            check = M.legacy_recovery_positive if row_id == 'http-015' else M.legacy_identity_safety
+            for key, value in (('actual_http', False), ('synthetic_dependency', True), ('mock_dependency', True), ('mock_provider', True), ('dependency_overridden', True), ('test', 'Other::test')):
+                bad = copy.deepcopy(control); bad[key] = value
+                with self.subTest(row=row_id, key=key): self.assertFalse(check(bad, binding, junit))
+            self.assertFalse(check(control, binding, {}))
+            self.assertFalse(check(control, binding, {key: False for key in junit}))
+
+    def test_legacy_missing_reason_stale_version_and_roles_are_distinct_required_controls(self):
+        row, binding, record, junit = self.legacy_record()
+        positive = record['controls']['authorized_positive']
+        for scenario in row['required_scenarios']:
+            control = self.legacy_negative(positive, scenario)
+            if scenario == 'guest': continue
+            self.assertTrue(M.legacy_recovery_negative(scenario, control, binding, junit))
+            bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+            self.assertFalse(M.legacy_recovery_negative(scenario, bad, binding, junit))
+        wrong = self.legacy_negative(positive, 'other_buyer')
+        self.assertFalse(M.legacy_recovery_negative('other_vendor', wrong, binding, junit))
+        stale = self.legacy_negative(positive, 'stale_version'); stale['submitted_version'] = 0
+        self.assertFalse(M.legacy_recovery_negative('stale_version', stale, binding, junit))
+        missing = self.legacy_negative(positive, 'missing_reason'); missing['reason_present'] = True
+        self.assertFalse(M.legacy_recovery_negative('missing_reason', missing, binding, junit))
+        gaps, _, _ = M.apply_legacy_form_overlay(row, [], {binding['file']: {row['id']: record}}, junit)
+        self.assertIn('negative:form:missing_reason', gaps)
+        self.assertIn('negative:form:stale_version', gaps)
+
+    def test_legacy_issued_identity_safety_never_replaces_mutation_or_negative_gaps(self):
+        row, binding, record, junit = self.legacy_record('http-014')
+        self.assertTrue(M.legacy_identity_safety(record['controls']['authorized_identity_safety_control'], binding, junit))
+        gaps, na, kind = M.apply_legacy_form_overlay(row, [], {binding['file']: {row['id']: record}}, junit)
+        self.assertIn('positive:form-contract', gaps)
+        self.assertIn('branch:cancel_review', gaps)
+        self.assertEqual(set(M.NEGATIVES), {gap.removeprefix('negative:form:') for gap in gaps if gap.startswith('negative:form:')})
+        self.assertEqual({}, na)
+        self.assertEqual('actual-form-identity-safety-denial', kind)
+        registration = {'rows': {row['id']: {'registered': True, 'actual_http': True, 'runtime': 'authenticated-http'}}}
+        junit[('RegisteredHttpSurfacesTest', 'test_production_surface_callback_is_actually_registered with data set "' + row['id'] + '"')] = True
+        report = M.evaluate({'rows': [row]}, registration, {}, {}, {}, junit, {binding['file']: {row['id']: record}})[0]
+        self.assertTrue(report['supplemental_safety_control_complete'])
+        self.assertIsNone(report['supplemental_positive_kind'])
+        self.assertFalse(report['positive_control_complete'])
+        self.assertFalse(report['negative_controls_complete'])
+        self.assertFalse(report['positive_and_negative_complete'])
+
+    def test_legacy_identity_safety_requires_identity_guard_preservation_and_no_dependency_claim(self):
+        row, binding, record, junit = self.legacy_record('http-014')
+        control = record['controls']['authorized_identity_safety_control']
+        for key, value in (('identity_guard_before_verifier', False), ('dependency_control_claimed', True), ('provider_verification_verified', True), ('http', 400)):
+            bad = copy.deepcopy(control); bad[key] = value
+            with self.subTest(key=key): self.assertFalse(M.legacy_identity_safety(bad, binding, junit))
+        bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_payments'] = 'b' * 64
+        self.assertFalse(M.legacy_identity_safety(bad, binding, junit))
+        bad = copy.deepcopy(control); del bad['identity_contract']['paid_amount']
+        self.assertFalse(M.legacy_identity_safety(bad, binding, junit))
+
+    def test_stale_or_other_run_supplemental_evidence_cannot_be_loaded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'http-payment-controls.json'
+            path.write_text(json.dumps({'_meta': {'schema_version': 1, 'run_id': '123', 'run_attempt': '1'}}))
+            started = path.stat().st_mtime_ns + 1
+            data, error = M.load_supplemental(path, started, {'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'})
+            self.assertEqual({}, data)
+            self.assertIn('stale-supplemental-evidence', error)
+            data, error = M.load_supplemental(path, 0, {'GITHUB_RUN_ID': '456', 'GITHUB_RUN_ATTEMPT': '1'})
+            self.assertEqual({}, data)
+            self.assertIn('supplemental-run-mismatch', error)
+            data, error = M.load_supplemental(path, 0, {'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'})
+            self.assertIsNone(error)
+            self.assertEqual('123', data['_meta']['run_id'])
+
+    def test_legacy_supplemental_file_is_bound_to_marker_run_and_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'http-legacy-request-form-controls.json'
+            path.write_text(json.dumps({'_meta': {'schema_version': 1, 'run_id': '123', 'run_attempt': '2'}}))
+            for started, run_id, attempt, expected in ((path.stat().st_mtime_ns + 1, '123', '2', 'stale-supplemental-evidence'),
+                                                      (0, '456', '2', 'supplemental-run-mismatch'),
+                                                      (0, '123', '1', 'supplemental-run-mismatch')):
+                data, error = M.load_supplemental(path, started, {'GITHUB_RUN_ID': run_id, 'GITHUB_RUN_ATTEMPT': attempt})
+                self.assertEqual({}, data)
+                self.assertIn(expected, error)
 
     def test_junit_skips_errors_zero_assertions_do_not_count(self):
         with tempfile.TemporaryDirectory() as directory:

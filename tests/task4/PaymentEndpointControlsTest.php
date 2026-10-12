@@ -186,15 +186,26 @@ final class PaymentEndpointControlsTest extends TestCase {
     }
 
     public function test_supplier_shortcode_exact_real_pinned_dependency_gate_preserves_financial_state(): void {
-        $target = $GLOBALS['shortcode_tags']['zbm_supplier_requests'] ?? null;
-        self::assertIsArray($target); self::assertInstanceOf(DokanPurchaseRequestEndpoint::class, $target[0]);
-        $health = PaymentEndpointFixture::property($target[0], 'health'); self::assertInstanceOf(DependencyHealth::class, $health);
+        // Resolve the production endpoint through its registered Dokan hook;
+        // the shortcode itself is dispatched and verified in the HTTP process.
+        $registration = $GLOBALS['wp_filter']['dokan_load_custom_template'] ?? null;
+        self::assertInstanceOf(WP_Hook::class, $registration);
+        $matches = [];
+        foreach ($registration->callbacks as $callbacks) {
+            foreach ($callbacks as $callback) {
+                $target = $callback['function'];
+                if (is_array($target) && ($target[0] ?? null) instanceof DokanPurchaseRequestEndpoint && ($target[1] ?? null) === 'loadTemplate') { $matches[] = $target[0]; }
+            }
+        }
+        self::assertCount(1, $matches, 'Exactly one real Dokan purchase-request endpoint must be registered.');
+        $endpoint = $matches[0];
+        $health = PaymentEndpointFixture::property($endpoint, 'health'); self::assertInstanceOf(DependencyHealth::class, $health);
         $report = $this->dependencies($health); self::assertFalse($health->canUseDokanBridge());
         self::assertFalse($report['dokan_pro']['ok']); self::assertSame('', $report['dokan_pro']['detected']); self::assertSame('5.0.8', $report['dokan_pro']['expected']);
         self::assertFalse($report['yith']['ok']); self::assertSame('', $report['yith']['detected']); self::assertSame('2.41.0', $report['yith']['expected']);
         $missing = $this->missing($report, ['dokan_lite', 'dokan_pro']);
         $users = Task4ManagedFixture::users();
-        $eligibility = PaymentEndpointFixture::property($target[0], 'vendor_eligibility');
+        $eligibility = PaymentEndpointFixture::property($endpoint, 'vendor_eligibility');
         self::assertTrue($eligibility->isApprovedVendor($users['vendor_1']));
         [$request] = CandidateFixture::request(['current_state' => 'supplier_review', 'supplier_deadline_gmt' => gmdate('Y-m-d H:i:s', time() + 3600)]);
         foreach (['guest' => 'guest', 'wrong_role' => 'buyer_1', 'other_buyer' => 'buyer_2', 'other_vendor' => 'vendor_2',
