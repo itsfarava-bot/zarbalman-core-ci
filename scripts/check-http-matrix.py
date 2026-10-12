@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+"""Fail closed on incomplete, stale, or dispatcher-only HTTP verification.
+Detailed diagnostics are written only below ignored evidence/. Stdout is counts only.
+Run marker must be created immediately before PHPUnit, in an emptied evidence directory.
+"""
+from pathlib import Path
+import argparse
+import collections
+import hashlib
+import json
+import os
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+NEGATIVES = ('guest', 'wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce')
+MANAGED_METHOD = 'test_operation_positive_or_explicit_dependency_control_and_six_rejections'
+
+
+def discover(root):
+    """Discover source declarations; identities do not depend on source line numbers.
+
+    Form hashes cover their actual routing/field block, with whitespace normalized.
+    This deliberately requires review if a form contract changes. It does not turn
+    source declarations into runtime registration or coverage evidence.
+    """
+    rows = []
+    def add(kind, path, surface, callback='', fingerprint=''):
+        rows.append(dict(kind=kind, source_path=str(path.relative_to(root)), surface=surface,
+                         callback=callback, fingerprint=fingerprint))
+    for path in sorted((root / 'plugin').rglob('*.php')):
+        source = path.read_text()
+        constants = {m[1]: m[3] for m in re.finditer(r'const\s+(\w+)\s*=\s*([\'\"])(.*?)\2', source, re.S)}
+        for m in re.finditer(r'add_action\s*\(\s*((?:[\'\"])(?:admin_post_|wp_ajax_).*?)\s*,\s*array\(\s*\$this\s*,\s*[\'\"]([^\'\"]+)[\'\"]', source, re.S):
+            literal = re.match(r'([\'\"])(.*?)\1', m[1], re.S)
+            name = literal[2]
+            suffix = re.search(r'\.\s*self::(\w+)', m[1])
+            if suffix:
+                name += constants[suffix[1]]
+            add('action', path, name, m[2])
+        parsed_actions = sum(r['source_path'] == str(path.relative_to(root)) and r['kind'] == 'action' for r in rows)
+        declared_actions = len(re.findall(r"add_action\s*\(\s*['\"](?:admin_post_|wp_ajax_)", source))
+        if parsed_actions != declared_actions:
+            add('unresolved action', path, 'unsupported-registration-expression')
+        for m in re.finditer(r'add_shortcode\s*\(\s*[\'\"]([^\'\"]+)[\'\"]\s*,\s*array\(\s*\$this\s*,\s*[\'\"]([^\'\"]+)[\'\"]', source, re.S):
+            add('shortcode', path, m[1], m[2])
+        parsed_shortcodes = sum(r['source_path'] == str(path.relative_to(root)) and r['kind'] == 'shortcode' for r in rows)
+        if parsed_shortcodes != len(re.findall(r'add_shortcode\s*\(', source)):
+            add('unresolved shortcode', path, 'unsupported-registration-expression')
+        parsed_rest_calls = 0
+        for m in re.finditer(r'register_rest_route\s*\(\s*self::NAMESPACE\s*,\s*[\'\"]([^\'\"]+)[\'\"]', source, re.S):
+            parsed_rest_calls += 1
+            end = source.find('\n\t\t);', m.end())
+            for method, callback in re.findall(r"'methods'\s*=>\s*'(\w+)'.*?'callback'\s*=>\s*array\(\s*\$this\s*,\s*'(\w+)'", source[m.start():end], re.S):
+                add('REST', path, f'{method} /{constants["NAMESPACE"]}{m[1]}', callback)
+        parsed_rest_methods = sum(r['source_path'] == str(path.relative_to(root)) and r['kind'] == 'REST' for r in rows)
+        if parsed_rest_calls != len(re.findall(r'register_rest_route\s*\(', source)) or (parsed_rest_calls and not parsed_rest_methods):
+            add('unresolved REST', path, 'unsupported-registration-expression')
+        for index, m in enumerate(re.finditer(r'<form\b', source), 1):
+            end = source.find('</form>', m.end())
+            segment = source[m.start():end if end != -1 else m.end() + 1700]
+            signature = hashlib.sha256(re.sub(r'\s+', ' ', segment).encode()).hexdigest()
+            add('form', path, f'form-{index}', fingerprint=signature)
+        if path.name == 'DokanVendorReportsEndpoint.php':
+            for m in re.finditer(r"add_action\s*\(\s*'dokan_load_custom_template'\s*,\s*array\(\s*\$this\s*,\s*'(\w+)'", source):
+                add('Dokan view', path, 'dokan:zbm-vendor-reports', m[1])
+    return rows
+
+
+def junit_results(path):
+    results = {}
+    for case in ET.parse(path).iter('testcase'):
+        name = case.get('name', '')
+        cls = case.get('classname') or case.get('class', '')
+        ok = int(case.get('assertions', '0')) > 0 and not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped'))
+        results[(cls, name)] = ok
+    return results
+
+
+def junit_pass(results, test, dataset=None):
+    if not test or '::' not in test:
+        return False
+    cls, method = test.split('::', 1)
+    if dataset is not None:
+        return results.get((cls, method + ' with data set "' + dataset + '"'), False)
+    matches = [ok for (name, case), ok in results.items() if name == cls and (case == method or case.startswith(method + ' with data set '))]
+    return bool(matches) and all(matches)
+
+
+def negative_ok(row):
+    """Require observed contracts; dispatcher-only 400 is not a named denial.
+
+    A validation 400 needs an explicit response message/code/notice, not the
+    scenario label. This helper is paired with passing same-run JUnit by callers.
+    """
+    if not isinstance(row, dict) or row.get('assertion_status', 'passed') != 'passed':
+        return False
+    observed = row.get('observed', row)
+    reason_text = str(observed.get('reason', '')).lower()
+    dispatcher = any(label in reason_text for label in (
+        'dispatcher', 'no public', 'no handler', 'unregistered', 'nopriv',
+        'default wordpress', 'generic wordpress',
+    ))
+    if observed.get('http') == 400:
+        body = observed.get('body')
+        if dispatcher or (isinstance(body, str) and body.strip() in ('', '0', 'wp_die')):
+            return False
+        specific = [observed.get('message'), observed.get('code'), observed.get('notice', {}).get('message')]
+        generic = {'', '0', '400', 'bad request', 'wordpress', 'wp_die', 'wp-die-message'}
+        return any(isinstance(value, str) and value.strip().lower() not in generic for value in specific)
+    reason = observed.get('reason') or observed.get('message') or observed.get('notice', {}).get('message') or row.get('effect')
+    return bool(reason) and isinstance(observed.get('http'), int)
+
+
+def not_applicable_contracts(endpoint, controls):
+    """Expose explicit tested N/A contracts without calling public reads denials."""
+    result = {}
+    public_reads = {'zbm_request_auth_state', 'zbm_request_pricing_preview', 'zbm_request_vendor_products'}
+    for scenario in NEGATIVES:
+        control = controls.get(scenario, {})
+        contract = control.get('nonce_contract', '')
+        if not negative_ok(control) or not isinstance(contract, str) or not contract.startswith('N/A:'):
+            continue
+        if scenario in ('no_nonce', 'invalid_nonce'):
+            result[endpoint + ':' + scenario] = {'nonce': contract}
+        if endpoint in public_reads and scenario != 'guest':
+            result.setdefault(endpoint + ':' + scenario, {})['role'] = 'N/A: tested public or authenticated read returns server-derived scope'
+        if endpoint == 'zbm_balance_callback':
+            result.setdefault(endpoint + ':' + scenario, {})['role'] = 'N/A: tested public callback checks persisted provider identity'
+    return result
+
+
+def managed_positive(row):
+    if row.get('state') != 'passed':
+        return False
+    positive = row.get('positive', {})
+    result = positive.get('result')
+    if result in ('accepted-durable-effects', 'accepted-durable-review-provider-unverified'):
+        return positive.get('http') in (200, 303) and positive.get('after_version', -1) > positive.get('before_version', -1) >= 0 and positive.get('effects', {}).get('durable_action_specific_assertions') is True
+    if result == 'retired-fail-closed':
+        return row.get('operation') == 'flow_override_delivery' and bool(positive.get('reason')) and negative_ok(positive)
+    if result == 'untestable-commercial-dependency':
+        reason = positive.get('reason', '').lower()
+        return row.get('operation') == 'manual_offer' and any(d in reason for d in ('yith', 'dokan', 'gateway', 'commercial')) and negative_ok(positive)
+    # Missing native assertions are not a commercial dependency exemption.
+    return False
+
+
+def remaining_positive(endpoint, rows):
+    """Known executed evidence contracts, paired with passing JUnit, not HTTP status alone."""
+    positives = {k: v for k, v in rows.items() if k.startswith('authorized') and v.get('assertion_status') == 'passed'}
+    def exact(key, effect):
+        p = positives.get(key, {})
+        return p.get('effect') == effect and p.get('http') in (200, 302, 303)
+    expected = {
+        'zbm_core_self_test': ('authorized_positive', 'real selftest result stored'),
+        'zbm_core_test_mode': ('authorized_disable_positive', 'legacy setting disabled with audit'),
+        'zbm_finance_destination': ('authorized_positive', 'private destination returned only with durable view audit'),
+        'zbm_finance_export': ('authorized_positive', 'read-only actual CSV; dangerous formula field escaped'),
+        'zbm_buyer_requests': ('authorized_positive', 'owner request detail rendered'),
+        'zbm_order_workflow': ('authorized_positive', 'owner legacy workflow rendered'),
+    }
+    if endpoint in expected:
+        key, effect = expected[endpoint]
+        p = positives.get(key, {})
+        if not exact(key, effect): return False
+        if endpoint == 'zbm_core_self_test': return isinstance(p.get('checks'), int) and p['checks'] > 0
+        if endpoint == 'zbm_core_test_mode':
+            return p.get('audit_id', 0) > 0 and exact('authorized_enable_retired', 'retired mutation correctly denied') and bool(positives['authorized_enable_retired'].get('reason'))
+        if endpoint == 'zbm_finance_destination': return p.get('audit_id', 0) > 0
+        if endpoint == 'zbm_finance_export': return p.get('ledger_id', 0) > 0
+        return True
+    if endpoint.startswith('REST '):
+        p = positives.get('authorized_positive', {})
+        result = p.get('result', {})
+        if endpoint.startswith('REST GET '):
+            return exact('authorized_positive', 'owner-scoped read; private pause reason omitted') and result.get('order_id', 0) > 0 and 'state' in result and 'version' in result
+        return exact('authorized_positive', 'actual REST workflow mutation persisted') and result.get('version', 0) > 0 and bool(result.get('event_uuid'))
+    if endpoint in ('zbm_request_auth_state', 'zbm_request_pricing_preview', 'zbm_request_vendor_products'):
+        return exact('authorized_positive', 'allowed read; nonce N/A by source contract; submitted role/vendor does not change server product scope') and bool(positives['authorized_positive'].get('nonce_contract'))
+    if endpoint == 'zbm_save_vendor_shipping_rate':
+        return all(exact('authorized_' + operation, 'real vendor shipping rate ' + operation + ' persisted') for operation in ('add', 'update', 'delete'))
+    if endpoint.startswith('zbm_vendor_request_decision/') or endpoint == 'zbm_create_purchase_request':
+        p = positives.get('authorized_dependency_control', {})
+        reason = p.get('reason', '') + ' ' + p.get('message', '')
+        code = p.get('dependency_code') or p.get('reason')
+        return p.get('http') == 303 and code == 'zbm_request_dependencies_unavailable' and 'Dokan Pro' in reason and 'valid' in p.get('effect', '')
+    if endpoint == 'zpal_manual_verify':
+        p = positives.get('authorized_retired_control', {})
+        return p.get('http') == 403 and p.get('effect') == 'retired dependency manual mutation intercepted for managed order' and bool(p.get('reason'))
+    # Ambiguous not_payable, forged callbacks and a rendered dependency gate do
+    # not prove accepted provider issuance/verification or an exact dependency cause.
+    return False
+
+
+def check_remaining(endpoint, rows):
+    gaps = []
+    if not remaining_positive(endpoint, rows): gaps.append('positive-control')
+    for scenario in NEGATIVES:
+        if not negative_ok(rows.get(scenario)): gaps.append('negative:' + scenario)
+    return gaps
+
+
+def additional_controls(contract, data):
+    group = data.get(contract['scenario'], {})
+    if group.get('status') != 'passed': return ['scenario-incomplete']
+    detail = group.get('detail', {})
+    gaps = []
+    for key in contract['positive']:
+        p = detail.get(key, {})
+        reason = p.get('reason', '')
+        # Names alone and a 2xx/3xx response do not establish a positive.
+        persisted = p.get('audit_id', 0) > 0 or 'durably paused with audit' in reason
+        read = (p.get('sha256') and len(p['sha256']) == 64) or ('own scoped report rendered' in reason and p.get('deposit_toman', 0) > 0)
+        routing = 'safe local return encoded and login filter consumes cookie' == reason
+        if p.get('http') not in (200, 302, 303) or not (persisted or read or routing): gaps.append('positive:' + key)
+    for key in contract['negative']:
+        if not negative_ok(detail.get(key)): gaps.append('negative:' + key)
+    return gaps
+
+
+def snapshot_valid(snapshot):
+    required = ('zbm_managed_cases', 'zbm_payments', 'zbm_ledger_entries', 'zbm_financial_actions', 'zbm_purchase_requests', 'zbm_audit_logs')
+    return isinstance(snapshot, dict) and all(any(key.endswith(suffix) for key in snapshot) for suffix in required) and all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{64}', value) for value in snapshot.values())
+
+
+def supplemental_base(record, binding, row_id, junit):
+    return (isinstance(record, dict) and record.get('state') == 'passed'
+            and record.get('assertion_status') == 'passed' and record.get('actual_http') is True
+            and record.get('test') == binding['test'] and row_id in record.get('catalog_ids', [])
+            and junit_pass(junit, binding['test'])
+            and not any(record.get(key) for key in ('synthetic_dependency', 'mock_dependency', 'mock_provider', 'dependency_overridden')))
+
+
+def actual_dependency_report(record, allowed_keys):
+    report = record.get('dependency_report', {})
+    missing = record.get('missing_dependencies', {})
+    currency = report.get('currency', {})
+    if currency.get('ok') is not True or currency.get('detected') != 'IRT': return False
+    if not isinstance(missing, dict) or not missing or not set(missing).issubset(allowed_keys): return False
+    for key, row in missing.items():
+        if row != report.get(key) or row.get('ok') is not False: return False
+        if not all(isinstance(row.get(field), str) for field in ('label', 'detected', 'expected', 'scope')): return False
+        if not row['label'] or not row['expected']: return False
+    expected_versions = {'zarinpal_version': '5.0.17', 'dokan_lite': '5.0.10', 'dokan_pro': '5.0.8', 'yith': '2.41.0'}
+    for key in allowed_keys:
+        row = report.get(key, {})
+        if not isinstance(row.get('ok'), bool): return False
+        if key in expected_versions and row.get('expected') != expected_versions[key]: return False
+    return True
+
+
+def unchanged_supplement(record):
+    before, after = record.get('before_snapshot'), record.get('after_snapshot')
+    return snapshot_valid(before) and snapshot_valid(after) and before == after
+
+
+def payment_control(record, binding, row_id, junit):
+    if not supplemental_base(record, binding, row_id, junit): return False
+    endpoint = binding['endpoint']
+    if endpoint == 'zbm_balance_start':
+        fixture = record.get('fixture_contract', {})
+        true_fields = ('live', 'owned', 'delivered', 'final_locked', 'deposit_verified', 'spec4_valid', 'payable')
+        false_fields = ('paused', 'reconciliation_required', 'manual_balance')
+        notice = record.get('notice', {})
+        return (record.get('type') == 'dependency' and record.get('http') == 303
+                and all(record.get(key) is True for key in ('actor_valid', 'key_valid', 'nonce_valid', 'financial_unchanged', 'case_unchanged', 'audit_unchanged'))
+                and all(fixture.get(key) is True for key in true_fields) and all(fixture.get(key) is False for key in false_fields)
+                and fixture.get('state') == fixture.get('substate') == 'balance_due'
+                and fixture.get('total_toman') == 1000 and fixture.get('deposit_toman') == 100
+                and fixture.get('balance_toman') == 0 and fixture.get('remaining_toman') == 900
+                and record.get('online_available') is False and record.get('provider_issuance_verified') is False
+                and notice.get('type') == 'error' and bool(notice.get('message'))
+                and actual_dependency_report(record, {'zarinpal_version', 'zarinpal_settings'})
+                and unchanged_supplement(record))
+    if endpoint == 'zbm_balance_callback':
+        if binding['scenario'].startswith('invalid_authority'):
+            return (record.get('type') == 'validation' and record.get('http') == 400
+                    and negative_ok(record) and record.get('financial_unchanged') is True
+                    and unchanged_supplement(record))
+        before, after = record.get('before_snapshot'), record.get('after_snapshot')
+        if not snapshot_valid(before) or not snapshot_valid(after) or set(before) != set(after): return False
+        allowed = ('zbm_payments', 'zbm_managed_cases', 'zbm_audit_logs', 'zbm_managed_case_commands', 'zbm_notification_outbox')
+        if any(before[key] != after[key] for key in before if not key.endswith(allowed)): return False
+        changed = ('zbm_payments', 'zbm_managed_cases', 'zbm_audit_logs')
+        if not all(any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in changed): return False
+        return (record.get('type') == 'dependency' and record.get('http') == 303
+                and all(record.get(key) is True for key in ('stored_binding_valid', 'callback_observed', 'amounts_and_ledger_unchanged'))
+                and all(record.get(key) is False for key in ('provider_credentials_configured', 'provider_verified', 'outbound_attempted'))
+                and record.get('provider_prerequisite_error') == 'Provider verification settings unavailable.'
+                and record.get('after_version', -1) == record.get('before_version', -1) + 2
+                and record.get('after_state') == 'admin_review' and record.get('substate') == 'payment_review'
+                and record.get('payment_status') == 'verification_pending' and record.get('balance_toman') == 0
+                and record.get('remaining_toman') == 900
+                and record.get('audit_events') == ['spec4_callback_received', 'spec4_payment_review']
+                and actual_dependency_report(record, {'zarinpal_version', 'zarinpal_settings'}))
+    if endpoint == 'zbm_supplier_requests':
+        return (record.get('type') == 'dependency' and record.get('http') == 200
+                and record.get('can_use_dokan_bridge') is False and record.get('owner_detail_rendered') is False
+                and record.get('approved_owner_vendor') is True and record.get('financial_unchanged') is True
+                and record.get('case_unchanged') is True and bool(record.get('message'))
+                and actual_dependency_report(record, {'dokan_lite', 'dokan_pro'})
+                and record.get('dependency_report', {}).get('dokan_pro', {}).get('ok') is False
+                and record.get('dependency_report', {}).get('dokan_pro', {}).get('detected') == ''
+                and unchanged_supplement(record))
+    return False
+
+
+def apply_payment_overlay(row, gaps, supplemental, junit):
+    bindings = row.get('supplemental', [])
+    if not bindings: return gaps, {}, None
+    records = []
+    for binding in bindings:
+        record = supplemental.get(binding['file'], {}).get(binding['endpoint'], {}).get(binding['scenario'], {})
+        if not payment_control(record, binding, row['id'], junit): return gaps, {}, None
+        records.append(record)
+    endpoints = {binding['endpoint'] for binding in bindings}
+    # The overlay supplies qualifying positive/validation proof. Original guest
+    # dispatcher gaps and all independent required negative controls remain.
+    gaps = [gap for gap in gaps if not any(gap == endpoint + ':positive-control' for endpoint in endpoints)]
+    na = {}
+    for binding, record in zip(bindings, records):
+        for kind in ('role', 'nonce'):
+            contract = record.get(kind + '_contract')
+            if isinstance(contract, str) and contract.startswith('N/A:'):
+                na.setdefault(binding['endpoint'] + ':' + binding['scenario'], {})[kind] = contract
+    return gaps, na, 'confirmed-commercial-dependency-control'
+
+
+def evaluate(catalog, registration, remaining, additional, managed, junit, supplemental=None):
+    supplemental = supplemental or {}
+    output = []
+    for row in catalog['rows']:
+        gaps = []
+        not_applicable = {}
+        runtime = registration.get('rows', {}).get(row['id'], {})
+        if runtime.get('registered') is not True: gaps.append('registration')
+        if not junit_pass(junit, 'RegisteredHttpSurfacesTest::test_production_surface_callback_is_actually_registered', row['id']): gaps.append('registration-junit')
+        contract = row['coverage']
+        if contract['type'] == 'form-contract':
+            gaps.append('positive-and-negative-controls:' + contract['key'])
+        elif contract['type'] == 'managed':
+            for key in contract['keys']:
+                result = managed.get('results', {}).get(key, {})
+                if not junit_pass(junit, contract['test'], key): gaps.append('junit:' + key)
+                if not managed_positive(result): gaps.append('positive:' + key)
+                for scenario in NEGATIVES:
+                    if not negative_ok(result.get('negative', {}).get(scenario)): gaps.append('negative:' + key + ':' + scenario)
+        else:
+            if not junit_pass(junit, contract['test']): gaps.append('junit')
+            if contract['type'] == 'remaining':
+                for endpoint in contract['keys']:
+                    controls = remaining.get(endpoint, {})
+                    gaps.extend(endpoint + ':' + gap for gap in check_remaining(endpoint, controls))
+                    if junit_pass(junit, contract['test']):
+                        not_applicable.update(not_applicable_contracts(endpoint, controls))
+            elif contract['type'] == 'additional': gaps.extend(additional_controls(contract, additional))
+            else: gaps.append('unknown-contract')
+        gaps, supplemental_na, positive_kind = apply_payment_overlay(row, gaps, supplemental, junit)
+        not_applicable.update(supplemental_na)
+        positive_gaps = [gap for gap in gaps if gap.startswith(('positive:', 'positive-and-negative-controls:', 'junit')) or ':positive-control' in gap or gap == 'scenario-incomplete']
+        negative_gaps = [gap for gap in gaps if gap.startswith(('negative:', 'positive-and-negative-controls:', 'junit')) or ':negative:' in gap or gap == 'scenario-incomplete']
+        output.append({'id': row['id'], 'kind': row['kind'], 'registered': runtime.get('registered') is True,
+                       'positive_control_complete': not positive_gaps,
+                       'supplemental_positive_kind': positive_kind,
+                       'negative_controls_complete': not negative_gaps,
+                       'not_applicable_controls': not_applicable,
+                       'positive_and_negative_complete': not gaps, 'gaps': gaps})
+    return output
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--run-start', type=Path, required=True)
+    parser.add_argument('--junit', type=Path, default=Path('evidence/candidate-junit.xml'))
+    args = parser.parse_args()
+    root = args.root.resolve()
+    evidence = root / 'evidence'
+    evidence.mkdir(exist_ok=True)
+    report = {'schema_version': 1, 'errors': [], 'rows': []}
+    try:
+        catalog = json.loads((root / 'ci/http-surfaces.json').read_text())
+        actual = discover(root)
+        by_id = {row['id']: row for row in catalog['rows']}
+        expected = [by_id[key]['declaration'] for key in catalog['discovery_order']]
+        if actual != expected: report['errors'].append('source-declarations-changed')
+        if len(catalog['rows']) != 86: report['errors'].append('catalog-count')
+        marker = args.run_start if args.run_start.is_absolute() else root / args.run_start
+        started = marker.stat().st_mtime_ns
+        junit_path = args.junit if args.junit.is_absolute() else root / args.junit
+        paths = [junit_path] + [evidence / name for name in ('http-surface-registration.json', 'task4-remaining-http.json', 'task4-additional-http.json', 'task4-managed-http.json')]
+        if any(path.stat().st_mtime_ns < started for path in paths): report['errors'].append('stale-run-evidence')
+        if marker.stat().st_size != 0: report['errors'].append('invalid-run-marker')
+        if not junit_pass(junit_results(junit_path), 'ManagedHttpMatrixTest::test_declared_operation_inventory_is_exactly_the_35_reviewed_operations'):
+            report['errors'].append('managed-operation-inventory-not-proved')
+        loaded = [json.loads(path.read_text()) for path in paths[1:]]
+        supplemental = {}
+        for name in sorted({binding['file'] for row in catalog['rows'] for binding in row.get('supplemental', [])}):
+            path = evidence / name
+            if path.stat().st_mtime_ns < started:
+                report['errors'].append('stale-supplemental-evidence:' + name)
+                continue
+            data = json.loads(path.read_text())
+            meta = data.get('_meta', {})
+            if meta.get('schema_version') != 1 or any(str(meta.get(key)) != os.environ.get(env, 'local') for key, env in (('run_id', 'GITHUB_RUN_ID'), ('run_attempt', 'GITHUB_RUN_ATTEMPT'))):
+                report['errors'].append('supplemental-run-mismatch:' + name)
+                continue
+            supplemental[name] = data
+        report['rows'] = evaluate(catalog, *loaded, junit_results(junit_path), supplemental)
+    except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as error:
+        report['errors'].append(type(error).__name__ + ':' + str(error))
+    failed = sum(not row['positive_and_negative_complete'] for row in report['rows'])
+    report['summary'] = {'rows': len(report['rows']), 'failed': failed, 'errors': len(report['errors'])}
+    (evidence / 'http-matrix-coverage.json').write_text(json.dumps(report, indent=2) + '\n')
+    print(json.dumps(report['summary'], sort_keys=True))
+    return int(bool(failed or report['errors'] or len(report['rows']) != 86))
+
+if __name__ == '__main__': sys.exit(main())

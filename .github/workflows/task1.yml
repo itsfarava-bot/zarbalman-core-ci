@@ -585,6 +585,12 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Check HTTP coverage
+      if: always()
+      run: |
+        python3 scripts/public-run.py <<'CI_COMMAND'
+        python3 scripts/check-http-matrix.py --run-start evidence/http-matrix-run-start
+        CI_COMMAND
     - name: Check 8
       if: always()
       run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\n\

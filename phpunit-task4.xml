@@ -21,6 +21,9 @@
       <file>tests/task4/ManagedRoleBranchesTest.php</file>
       <file>tests/task4/EvidencePurposePrivacyTest.php</file>
       <file>tests/task4/RemainingEndpointsTest.php</file>
+      <file>tests/task4/LegacyNotificationSettingTest.php</file>
+      <file>tests/task4/PaymentEndpointControlsTest.php</file>
+      <file>tests/task4/RegisteredHttpSurfacesTest.php</file>
     </testsuite>
   </testsuites>
 </phpunit>

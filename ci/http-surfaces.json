@@ -1,0 +1,2823 @@
+{
+  "schema_version": 1,
+  "scope": "Production HTTP registrations and form declarations; form rows can share a handler. Registration and execution are separate controls.",
+  "counts": {
+    "action": 28,
+    "form": 51,
+    "shortcode": 3,
+    "REST": 3,
+    "Dokan view": 1
+  },
+  "managed_operations": [
+    "flow_record_weight",
+    "flow_ready_delivery",
+    "flow_ready_pickup",
+    "flow_dispatch",
+    "flow_deliver",
+    "flow_propose_weight",
+    "flow_pause",
+    "flow_resume",
+    "flow_extend",
+    "flow_extend_delivery",
+    "flow_reopen_preparation",
+    "flow_reopen_buyer",
+    "flow_reopen_seller",
+    "flow_set_final_weight",
+    "flow_reissue_code",
+    "flow_override_delivery",
+    "flow_note",
+    "flow_refer_return",
+    "flow_cancel",
+    "flow_accept_weight",
+    "flow_object",
+    "manual_offer",
+    "manual_receipt",
+    "manual_approve",
+    "manual_reject",
+    "manual_credit_seller",
+    "spec4_contact",
+    "spec4_confirm_return",
+    "spec4_create_refund",
+    "spec4_approve_action",
+    "spec4_execute_action",
+    "spec4_fail_action",
+    "spec4_reconcile_action",
+    "spec4_accept_late",
+    "spec4_reverify"
+  ],
+  "rows": [
+    {
+      "id": "http-001",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/AdminPage.php",
+      "surface": "admin_post_zbm_core_self_test",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/AdminPage.php",
+        "surface": "admin_post_zbm_core_self_test",
+        "callback": "handle_self_test",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\AdminPage",
+        "callback": "handle_self_test",
+        "hook": "admin_post_zbm_core_self_test"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_admin_selftest_has_capability_nonce_matrix_and_real_positive_result",
+        "keys": [
+          "zbm_core_self_test"
+        ]
+      }
+    },
+    {
+      "id": "http-002",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/AdminPage.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/AdminPage.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "1abbbfe4b70c118226f9cfcc77b5db2ae937142951d648a01e99335c6f8bda9e"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_core_self_test",
+        "class": "Zarbalman\\Core\\Admin\\AdminPage",
+        "callback": "handle_self_test"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_admin_selftest_has_capability_nonce_matrix_and_real_positive_result",
+        "keys": [
+          "zbm_core_self_test"
+        ]
+      }
+    },
+    {
+      "id": "http-003",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/AdminTestModePage.php",
+      "surface": "admin_post_zbm_core_test_mode",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/AdminTestModePage.php",
+        "surface": "admin_post_zbm_core_test_mode",
+        "callback": "handle",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\AdminTestModePage",
+        "callback": "handle",
+        "hook": "admin_post_zbm_core_test_mode"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_admin_testmode_disable_is_durable_and_enable_is_retired",
+        "keys": [
+          "zbm_core_test_mode"
+        ]
+      }
+    },
+    {
+      "id": "http-004",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/AdminTestModePage.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/AdminTestModePage.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "bf2b2bfbec3fb1d3c28eee27fedf37b41c089d298b76dabab5f07e9f4dab47b9"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_core_test_mode",
+        "class": "Zarbalman\\Core\\Admin\\AdminTestModePage",
+        "callback": "handle"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_admin_testmode_disable_is_durable_and_enable_is_retired",
+        "keys": [
+          "zbm_core_test_mode"
+        ]
+      }
+    },
+    {
+      "id": "http-005",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+      "surface": "admin_post_zbm_manual_payment_settings",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+        "surface": "admin_post_zbm_manual_payment_settings",
+        "callback": "saveSettings",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\ManualPaymentsPage",
+        "callback": "saveSettings",
+        "hook": "admin_post_zbm_manual_payment_settings"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_manual_settings_and_online_stop_require_finance_nonce_and_commit_audit",
+        "scenario": "manual-settings-and-online-control",
+        "positive": [
+          "zbm_manual_payment_settings/admin_positive"
+        ],
+        "negative": [
+          "zbm_manual_payment_settings/wrong_role",
+          "zbm_manual_payment_settings/other_buyer",
+          "zbm_manual_payment_settings/other_vendor",
+          "zbm_manual_payment_settings/guest",
+          "zbm_manual_payment_settings/missing_nonce",
+          "zbm_manual_payment_settings/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-006",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+      "surface": "admin_post_zbm_online_payment_control",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+        "surface": "admin_post_zbm_online_payment_control",
+        "callback": "saveOnlineControl",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\ManualPaymentsPage",
+        "callback": "saveOnlineControl",
+        "hook": "admin_post_zbm_online_payment_control"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_manual_settings_and_online_stop_require_finance_nonce_and_commit_audit",
+        "scenario": "manual-settings-and-online-control",
+        "positive": [
+          "zbm_online_payment_control/admin_positive"
+        ],
+        "negative": [
+          "zbm_online_payment_control/wrong_role",
+          "zbm_online_payment_control/other_buyer",
+          "zbm_online_payment_control/other_vendor",
+          "zbm_online_payment_control/guest",
+          "zbm_online_payment_control/missing_nonce",
+          "zbm_online_payment_control/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-007",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "a6d3875f321dfc6d8f674fa0d94d38a8dbe81e340b0ba9622fc91f73f9073391"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_online_payment_control",
+        "class": "Zarbalman\\Core\\Admin\\ManualPaymentsPage",
+        "callback": "saveOnlineControl"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_manual_settings_and_online_stop_require_finance_nonce_and_commit_audit",
+        "scenario": "manual-settings-and-online-control",
+        "positive": [
+          "zbm_online_payment_control/admin_positive"
+        ],
+        "negative": [
+          "zbm_online_payment_control/wrong_role",
+          "zbm_online_payment_control/other_buyer",
+          "zbm_online_payment_control/other_vendor",
+          "zbm_online_payment_control/guest",
+          "zbm_online_payment_control/missing_nonce",
+          "zbm_online_payment_control/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-008",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/ManualPaymentsPage.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "db49b088246454bf70532ca52e3c28fbc5b6dd7678ce11fe5b4a456a00659f2d"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_manual_payment_settings",
+        "class": "Zarbalman\\Core\\Admin\\ManualPaymentsPage",
+        "callback": "saveSettings"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_manual_settings_and_online_stop_require_finance_nonce_and_commit_audit",
+        "scenario": "manual-settings-and-online-control",
+        "positive": [
+          "zbm_manual_payment_settings/admin_positive"
+        ],
+        "negative": [
+          "zbm_manual_payment_settings/wrong_role",
+          "zbm_manual_payment_settings/other_buyer",
+          "zbm_manual_payment_settings/other_vendor",
+          "zbm_manual_payment_settings/guest",
+          "zbm_manual_payment_settings/missing_nonce",
+          "zbm_manual_payment_settings/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-009",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/OrderOperationsMetaBox.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/OrderOperationsMetaBox.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "a1df04941290917dbf9adecef973983e0783649f5c047551206f30297e06f06c"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_core_control",
+        "class": "Zarbalman\\Core\\Http\\WorkflowActionHandler",
+        "callback": "control"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_hpos_metabox_actual_forms_submit_through_workflow_handler",
+        "scenario": "hpos-metabox-and-workflow-forms",
+        "positive": [
+          "control_positive"
+        ],
+        "negative": [
+          "zbm_core_control:/wrong_buyer",
+          "zbm_core_control:/wrong_vendor",
+          "zbm_core_control:/other_buyer",
+          "zbm_core_control:/other_vendor",
+          "zbm_core_control:/guest",
+          "zbm_core_control:/missing_nonce",
+          "zbm_core_control:/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-010",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/OrderOperationsMetaBox.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/OrderOperationsMetaBox.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "31ed834390b1c6f2a3dd37f1616dc2f46ffa6de286fb59aa42e26df2fc437399"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_core_transition",
+        "class": "Zarbalman\\Core\\Http\\WorkflowActionHandler",
+        "callback": "transition"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_hpos_metabox_actual_forms_submit_through_workflow_handler",
+        "scenario": "hpos-metabox-and-workflow-forms",
+        "positive": [
+          "transition_positive"
+        ],
+        "negative": [
+          "zbm_core_transition:deposit_pending/wrong_buyer",
+          "zbm_core_transition:deposit_pending/wrong_vendor",
+          "zbm_core_transition:deposit_pending/other_buyer",
+          "zbm_core_transition:deposit_pending/other_vendor",
+          "zbm_core_transition:deposit_pending/guest",
+          "zbm_core_transition:deposit_pending/missing_nonce",
+          "zbm_core_transition:deposit_pending/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-011",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+      "surface": "admin_post_zbm_admin_request_control",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+        "surface": "admin_post_zbm_admin_request_control",
+        "callback": "handle",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\PurchaseRequestAdmin",
+        "callback": "handle",
+        "hook": "admin_post_zbm_admin_request_control"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_purchase_request_pause_positive_and_named_rejection_reasons",
+        "scenario": "purchase-request-admin-control",
+        "positive": [
+          "admin_positive"
+        ],
+        "negative": [
+          "wrong_role",
+          "other_buyer",
+          "other_vendor",
+          "guest",
+          "missing_nonce",
+          "invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-012",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "ee3b0ec4a82af05984e666f551249b58962071cb5a00a614f8942be73c5b6592"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "admin-page",
+        "bootstrap_hook": "admin_menu",
+        "bootstrap_callback": "menu",
+        "class": "Zarbalman\\Core\\Admin\\PurchaseRequestAdmin",
+        "callback": "render",
+        "page_slug": "zbm-core-requests",
+        "parent_slug": "woocommerce"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "admin-search",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-013",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "6f7229ef4a6ef95b5c2017e9815c634f478aa07d3df432398d9a5e3dd78f5e9b"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_admin_request_control",
+        "class": "Zarbalman\\Core\\Admin\\PurchaseRequestAdmin",
+        "callback": "handle"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "purchase-request-state-control",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-014",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "6d9b69fc47e16156f082f9fd41441cd2b89e7799b83b96b8f14ba759f9326ede"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_admin_request_control",
+        "class": "Zarbalman\\Core\\Admin\\PurchaseRequestAdmin",
+        "callback": "handle"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "purchase-request-unverified-cancel",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-015",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+      "surface": "form-4",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/PurchaseRequestAdmin.php",
+        "surface": "form-4",
+        "callback": "",
+        "fingerprint": "4502819577d17b5a2ce8fafbfd67f754170616811372dbe77a5ee0f5cffbd356"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_admin_request_control",
+        "class": "Zarbalman\\Core\\Admin\\PurchaseRequestAdmin",
+        "callback": "handle"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "purchase-request-test-recovery",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-016",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/Spec3Settings.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/Spec3Settings.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "12324010333ceb7a7972337f802037093236a9e33f72fa06dc46539ac16b621c"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "settings",
+        "hook": "admin_init",
+        "class": "Zarbalman\\Core\\Admin\\Spec3Settings",
+        "callback": "settings",
+        "options": {
+          "zbm_core_delivery_reminder_minutes": "sanitizeReminder",
+          "zbm_core_sms_templates": "sanitizeTemplates"
+        },
+        "group": "zbm_core_spec3"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "core-settings",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-017",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+      "surface": "admin_post_zbm_finance_export",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+        "surface": "admin_post_zbm_finance_export",
+        "callback": "export",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\Spec4FinancePage",
+        "callback": "export",
+        "hook": "admin_post_zbm_finance_export"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_finance_export_and_destination_have_exact_matrix_and_positive_controls",
+        "keys": [
+          "zbm_finance_export"
+        ]
+      }
+    },
+    {
+      "id": "http-018",
+      "kind": "action",
+      "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+      "surface": "admin_post_zbm_finance_destination",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+        "surface": "admin_post_zbm_finance_destination",
+        "callback": "destination",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Admin\\Spec4FinancePage",
+        "callback": "destination",
+        "hook": "admin_post_zbm_finance_destination"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_finance_export_and_destination_have_exact_matrix_and_positive_controls",
+        "keys": [
+          "zbm_finance_destination"
+        ]
+      }
+    },
+    {
+      "id": "http-019",
+      "kind": "form",
+      "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Admin/Spec4FinancePage.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "5a26d3fc9a45955f77a153c9f7d345d217ac076ad603fa6184f625dd9269bbd0"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_finance_export",
+        "class": "Zarbalman\\Core\\Admin\\Spec4FinancePage",
+        "callback": "export"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_finance_export_and_destination_have_exact_matrix_and_positive_controls",
+        "keys": [
+          "zbm_finance_export"
+        ]
+      }
+    },
+    {
+      "id": "http-020",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "admin_post_zbm_create_purchase_request",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "admin_post_zbm_create_purchase_request",
+        "callback": "handleCreate",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "handleCreate",
+        "hook": "admin_post_zbm_create_purchase_request"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_buyer_creation_valid_form_reaches_real_commercial_dependency_denial",
+        "keys": [
+          "zbm_create_purchase_request"
+        ]
+      }
+    },
+    {
+      "id": "http-021",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "admin_post_nopriv_zbm_create_purchase_request",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "admin_post_nopriv_zbm_create_purchase_request",
+        "callback": "requireLogin",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "requireLogin",
+        "hook": "admin_post_nopriv_zbm_create_purchase_request"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_buyer_creation_valid_form_reaches_real_commercial_dependency_denial",
+        "keys": [
+          "zbm_create_purchase_request"
+        ]
+      }
+    },
+    {
+      "id": "http-022",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "admin_post_zbm_prepare_request_auth",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "admin_post_zbm_prepare_request_auth",
+        "callback": "prepareRequestAuth",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "prepareRequestAuth",
+        "hook": "admin_post_zbm_prepare_request_auth"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_guest_login_return_cookie_rejects_external_hosts_and_consumes_safe_return",
+        "scenario": "guest-login-return-open-redirect",
+        "positive": [
+          "safe"
+        ],
+        "negative": [
+          "external",
+          "scheme_relative",
+          "host_lookalike",
+          "javascript",
+          "userinfo"
+        ]
+      }
+    },
+    {
+      "id": "http-023",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "admin_post_nopriv_zbm_prepare_request_auth",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "admin_post_nopriv_zbm_prepare_request_auth",
+        "callback": "prepareRequestAuth",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "prepareRequestAuth",
+        "hook": "admin_post_nopriv_zbm_prepare_request_auth"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_guest_login_return_cookie_rejects_external_hosts_and_consumes_safe_return",
+        "scenario": "guest-login-return-open-redirect",
+        "positive": [
+          "safe"
+        ],
+        "negative": [
+          "external",
+          "scheme_relative",
+          "host_lookalike",
+          "javascript",
+          "userinfo"
+        ]
+      }
+    },
+    {
+      "id": "http-024",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "wp_ajax_zbm_request_auth_state",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "wp_ajax_zbm_request_auth_state",
+        "callback": "authStateProbe",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "authStateProbe",
+        "hook": "wp_ajax_zbm_request_auth_state"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_ajax_auth_pricing_and_catalogue_are_real_public_or_scoped_reads",
+        "keys": [
+          "zbm_request_auth_state"
+        ]
+      }
+    },
+    {
+      "id": "http-025",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "wp_ajax_nopriv_zbm_request_auth_state",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "wp_ajax_nopriv_zbm_request_auth_state",
+        "callback": "authStateProbe",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "authStateProbe",
+        "hook": "wp_ajax_nopriv_zbm_request_auth_state"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_ajax_auth_pricing_and_catalogue_are_real_public_or_scoped_reads",
+        "keys": [
+          "zbm_request_auth_state"
+        ]
+      }
+    },
+    {
+      "id": "http-026",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "wp_ajax_zbm_request_pricing_preview",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "wp_ajax_zbm_request_pricing_preview",
+        "callback": "pricingPreview",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "pricingPreview",
+        "hook": "wp_ajax_zbm_request_pricing_preview"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_ajax_auth_pricing_and_catalogue_are_real_public_or_scoped_reads",
+        "keys": [
+          "zbm_request_pricing_preview"
+        ]
+      }
+    },
+    {
+      "id": "http-027",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "wp_ajax_nopriv_zbm_request_pricing_preview",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "wp_ajax_nopriv_zbm_request_pricing_preview",
+        "callback": "pricingPreview",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "pricingPreview",
+        "hook": "wp_ajax_nopriv_zbm_request_pricing_preview"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_ajax_auth_pricing_and_catalogue_are_real_public_or_scoped_reads",
+        "keys": [
+          "zbm_request_pricing_preview"
+        ]
+      }
+    },
+    {
+      "id": "http-028",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+      "surface": "wp_ajax_zbm_request_vendor_products",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/BuyerRequestController.php",
+        "surface": "wp_ajax_zbm_request_vendor_products",
+        "callback": "vendorProducts",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "vendorProducts",
+        "hook": "wp_ajax_zbm_request_vendor_products"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_ajax_auth_pricing_and_catalogue_are_real_public_or_scoped_reads",
+        "keys": [
+          "zbm_request_vendor_products"
+        ]
+      }
+    },
+    {
+      "id": "http-029",
+      "kind": "shortcode",
+      "source_path": "plugin/src/Frontend/BuyerRequestEndpoint.php",
+      "surface": "zbm_buyer_requests",
+      "declaration": {
+        "kind": "shortcode",
+        "source_path": "plugin/src/Frontend/BuyerRequestEndpoint.php",
+        "surface": "zbm_buyer_requests",
+        "callback": "shortcode",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "shortcode",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestEndpoint",
+        "callback": "shortcode",
+        "hook": "zbm_buyer_requests"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_registered_shortcodes_return_owner_reads_and_explicit_commercial_view_limitation",
+        "keys": [
+          "zbm_buyer_requests"
+        ]
+      }
+    },
+    {
+      "id": "http-030",
+      "kind": "shortcode",
+      "source_path": "plugin/src/Frontend/OrderWorkflowPanel.php",
+      "surface": "zbm_order_workflow",
+      "declaration": {
+        "kind": "shortcode",
+        "source_path": "plugin/src/Frontend/OrderWorkflowPanel.php",
+        "surface": "zbm_order_workflow",
+        "callback": "shortcode",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "shortcode",
+        "class": "Zarbalman\\Core\\Frontend\\OrderWorkflowPanel",
+        "callback": "shortcode",
+        "hook": "zbm_order_workflow"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_registered_shortcodes_return_owner_reads_and_explicit_commercial_view_limitation",
+        "keys": [
+          "zbm_order_workflow"
+        ]
+      }
+    },
+    {
+      "id": "http-031",
+      "kind": "form",
+      "source_path": "plugin/src/Frontend/OrderWorkflowPanel.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/src/Frontend/OrderWorkflowPanel.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "08aecfe897328bb94cadc137b8cda359fbaf439b4d7d0efe8cc593f6a68bb8e5"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_core_transition",
+        "class": "Zarbalman\\Core\\Http\\WorkflowActionHandler",
+        "callback": "transition"
+      },
+      "coverage": {
+        "type": "form-contract",
+        "key": "frontend-workflow",
+        "test": ""
+      }
+    },
+    {
+      "id": "http-032",
+      "kind": "action",
+      "source_path": "plugin/src/Frontend/VendorRequestController.php",
+      "surface": "admin_post_zbm_vendor_request_decision",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Frontend/VendorRequestController.php",
+        "surface": "admin_post_zbm_vendor_request_decision",
+        "callback": "handle",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Frontend\\VendorRequestController",
+        "callback": "handle",
+        "hook": "admin_post_zbm_vendor_request_decision"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_decisions_use_valid_owned_fixtures_and_exact_dependency_limitation",
+        "keys": [
+          "zbm_vendor_request_decision/accept",
+          "zbm_vendor_request_decision/reject"
+        ]
+      }
+    },
+    {
+      "id": "http-033",
+      "kind": "action",
+      "source_path": "plugin/src/Http/BalancePaymentController.php",
+      "surface": "admin_post_zbm_balance_start",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/BalancePaymentController.php",
+        "surface": "admin_post_zbm_balance_start",
+        "callback": "start",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\BalancePaymentController",
+        "callback": "start",
+        "hook": "admin_post_zbm_balance_start"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_balance_start_valid_delivered_paid_fixture_has_exact_gateway_denial",
+        "keys": [
+          "zbm_balance_start"
+        ]
+      },
+      "supplemental": [
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_start",
+          "scenario": "authorized_dependency_control",
+          "test": "PaymentEndpointControlsTest::test_balance_start_is_payable_and_only_real_gateway_health_blocks_authorized_http"
+        }
+      ]
+    },
+    {
+      "id": "http-034",
+      "kind": "action",
+      "source_path": "plugin/src/Http/BalancePaymentController.php",
+      "surface": "admin_post_zbm_balance_callback",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/BalancePaymentController.php",
+        "surface": "admin_post_zbm_balance_callback",
+        "callback": "callback",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\BalancePaymentController",
+        "callback": "callback",
+        "hook": "admin_post_zbm_balance_callback"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_balance_callback_public_contract_rejects_forged_identity_without_money",
+        "keys": [
+          "zbm_balance_callback"
+        ]
+      },
+      "supplemental": [
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_callback",
+          "scenario": "authorized_dependency_control",
+          "test": "PaymentEndpointControlsTest::test_callback_valid_stored_binding_enters_real_provider_unavailable_review_without_credit"
+        },
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_callback",
+          "scenario": "invalid_authority",
+          "test": "PaymentEndpointControlsTest::test_invalid_authority_has_specific_actual_http_validation_message_and_no_writes"
+        }
+      ]
+    },
+    {
+      "id": "http-035",
+      "kind": "action",
+      "source_path": "plugin/src/Http/BalancePaymentController.php",
+      "surface": "admin_post_nopriv_zbm_balance_callback",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/BalancePaymentController.php",
+        "surface": "admin_post_nopriv_zbm_balance_callback",
+        "callback": "callback",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\BalancePaymentController",
+        "callback": "callback",
+        "hook": "admin_post_nopriv_zbm_balance_callback"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_balance_callback_public_contract_rejects_forged_identity_without_money",
+        "keys": [
+          "zbm_balance_callback"
+        ]
+      },
+      "supplemental": [
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_callback",
+          "scenario": "public_dependency_control",
+          "test": "PaymentEndpointControlsTest::test_callback_valid_stored_binding_enters_real_provider_unavailable_review_without_credit"
+        },
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_callback",
+          "scenario": "invalid_authority_guest",
+          "test": "PaymentEndpointControlsTest::test_invalid_authority_has_specific_actual_http_validation_message_and_no_writes"
+        }
+      ]
+    },
+    {
+      "id": "http-036",
+      "kind": "action",
+      "source_path": "plugin/src/Http/EvidenceDownloadController.php",
+      "surface": "admin_post_zbm_core_download_evidence",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/EvidenceDownloadController.php",
+        "surface": "admin_post_zbm_core_download_evidence",
+        "callback": "download",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\EvidenceDownloadController",
+        "callback": "download",
+        "hook": "admin_post_zbm_core_download_evidence"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_private_legacy_and_managed_downloads_have_real_binary_positives_and_exact_denials",
+        "scenario": "evidence-download-legacy-and-managed",
+        "positive": [
+          "legacy/buyer_1",
+          "legacy/admin"
+        ],
+        "negative": [
+          "legacy/buyer_2",
+          "legacy/vendor_2",
+          "legacy/missing_nonce",
+          "legacy/invalid_nonce",
+          "legacy/guest"
+        ]
+      }
+    },
+    {
+      "id": "http-037",
+      "kind": "action",
+      "source_path": "plugin/src/Http/EvidenceDownloadController.php",
+      "surface": "admin_post_zbm_core_download_managed_evidence",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/EvidenceDownloadController.php",
+        "surface": "admin_post_zbm_core_download_managed_evidence",
+        "callback": "downloadManaged",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\EvidenceDownloadController",
+        "callback": "downloadManaged",
+        "hook": "admin_post_zbm_core_download_managed_evidence"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_private_legacy_and_managed_downloads_have_real_binary_positives_and_exact_denials",
+        "scenario": "evidence-download-legacy-and-managed",
+        "positive": [
+          "managed/buyer_1",
+          "managed/admin"
+        ],
+        "negative": [
+          "managed/buyer_2",
+          "managed/vendor_2",
+          "managed/missing_nonce",
+          "managed/invalid_nonce",
+          "managed/guest"
+        ]
+      }
+    },
+    {
+      "id": "http-038",
+      "kind": "action",
+      "source_path": "plugin/src/Http/ManagedCaseActionController.php",
+      "surface": "admin_post_zbm_managed_case_action",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/ManagedCaseActionController.php",
+        "surface": "admin_post_zbm_managed_case_action",
+        "callback": "handle",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle",
+        "hook": "admin_post_zbm_managed_case_action"
+      },
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_record_weight/admin-post.php",
+          "flow_ready_delivery/admin-post.php",
+          "flow_ready_pickup/admin-post.php",
+          "flow_dispatch/admin-post.php",
+          "flow_deliver/admin-post.php",
+          "flow_propose_weight/admin-post.php",
+          "flow_pause/admin-post.php",
+          "flow_resume/admin-post.php",
+          "flow_extend/admin-post.php",
+          "flow_extend_delivery/admin-post.php",
+          "flow_reopen_preparation/admin-post.php",
+          "flow_reopen_buyer/admin-post.php",
+          "flow_reopen_seller/admin-post.php",
+          "flow_set_final_weight/admin-post.php",
+          "flow_reissue_code/admin-post.php",
+          "flow_override_delivery/admin-post.php",
+          "flow_note/admin-post.php",
+          "flow_refer_return/admin-post.php",
+          "flow_cancel/admin-post.php",
+          "flow_accept_weight/admin-post.php",
+          "flow_object/admin-post.php",
+          "manual_offer/admin-post.php",
+          "manual_receipt/admin-post.php",
+          "manual_approve/admin-post.php",
+          "manual_reject/admin-post.php",
+          "manual_credit_seller/admin-post.php",
+          "spec4_contact/admin-post.php",
+          "spec4_confirm_return/admin-post.php",
+          "spec4_create_refund/admin-post.php",
+          "spec4_approve_action/admin-post.php",
+          "spec4_execute_action/admin-post.php",
+          "spec4_fail_action/admin-post.php",
+          "spec4_reconcile_action/admin-post.php",
+          "spec4_accept_late/admin-post.php",
+          "spec4_reverify/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-039",
+      "kind": "action",
+      "source_path": "plugin/src/Http/ManagedCaseActionController.php",
+      "surface": "wp_ajax_zbm_managed_case_action",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/ManagedCaseActionController.php",
+        "surface": "wp_ajax_zbm_managed_case_action",
+        "callback": "handle",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle",
+        "hook": "wp_ajax_zbm_managed_case_action"
+      },
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_record_weight/admin-ajax.php",
+          "flow_ready_delivery/admin-ajax.php",
+          "flow_ready_pickup/admin-ajax.php",
+          "flow_dispatch/admin-ajax.php",
+          "flow_deliver/admin-ajax.php",
+          "flow_propose_weight/admin-ajax.php",
+          "flow_pause/admin-ajax.php",
+          "flow_resume/admin-ajax.php",
+          "flow_extend/admin-ajax.php",
+          "flow_extend_delivery/admin-ajax.php",
+          "flow_reopen_preparation/admin-ajax.php",
+          "flow_reopen_buyer/admin-ajax.php",
+          "flow_reopen_seller/admin-ajax.php",
+          "flow_set_final_weight/admin-ajax.php",
+          "flow_reissue_code/admin-ajax.php",
+          "flow_override_delivery/admin-ajax.php",
+          "flow_note/admin-ajax.php",
+          "flow_refer_return/admin-ajax.php",
+          "flow_cancel/admin-ajax.php",
+          "flow_accept_weight/admin-ajax.php",
+          "flow_object/admin-ajax.php",
+          "manual_offer/admin-ajax.php",
+          "manual_receipt/admin-ajax.php",
+          "manual_approve/admin-ajax.php",
+          "manual_reject/admin-ajax.php",
+          "manual_credit_seller/admin-ajax.php",
+          "spec4_contact/admin-ajax.php",
+          "spec4_confirm_return/admin-ajax.php",
+          "spec4_create_refund/admin-ajax.php",
+          "spec4_approve_action/admin-ajax.php",
+          "spec4_execute_action/admin-ajax.php",
+          "spec4_fail_action/admin-ajax.php",
+          "spec4_reconcile_action/admin-ajax.php",
+          "spec4_accept_late/admin-ajax.php",
+          "spec4_reverify/admin-ajax.php"
+        ]
+      }
+    },
+    {
+      "id": "http-040",
+      "kind": "action",
+      "source_path": "plugin/src/Http/WorkflowActionHandler.php",
+      "surface": "admin_post_zbm_core_transition",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/WorkflowActionHandler.php",
+        "surface": "admin_post_zbm_core_transition",
+        "callback": "transition",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\WorkflowActionHandler",
+        "callback": "transition",
+        "hook": "admin_post_zbm_core_transition"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_hpos_metabox_actual_forms_submit_through_workflow_handler",
+        "scenario": "hpos-metabox-and-workflow-forms",
+        "positive": [
+          "transition_positive"
+        ],
+        "negative": [
+          "zbm_core_transition:deposit_pending/wrong_buyer",
+          "zbm_core_transition:deposit_pending/wrong_vendor",
+          "zbm_core_transition:deposit_pending/other_buyer",
+          "zbm_core_transition:deposit_pending/other_vendor",
+          "zbm_core_transition:deposit_pending/guest",
+          "zbm_core_transition:deposit_pending/missing_nonce",
+          "zbm_core_transition:deposit_pending/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-041",
+      "kind": "action",
+      "source_path": "plugin/src/Http/WorkflowActionHandler.php",
+      "surface": "admin_post_zbm_core_control",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Http/WorkflowActionHandler.php",
+        "surface": "admin_post_zbm_core_control",
+        "callback": "control",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Http\\WorkflowActionHandler",
+        "callback": "control",
+        "hook": "admin_post_zbm_core_control"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_hpos_metabox_actual_forms_submit_through_workflow_handler",
+        "scenario": "hpos-metabox-and-workflow-forms",
+        "positive": [
+          "control_positive"
+        ],
+        "negative": [
+          "zbm_core_control:/wrong_buyer",
+          "zbm_core_control:/wrong_vendor",
+          "zbm_core_control:/other_buyer",
+          "zbm_core_control:/other_vendor",
+          "zbm_core_control:/guest",
+          "zbm_core_control:/missing_nonce",
+          "zbm_core_control:/invalid_nonce"
+        ]
+      }
+    },
+    {
+      "id": "http-042",
+      "kind": "shortcode",
+      "source_path": "plugin/src/Integration/DokanPurchaseRequestEndpoint.php",
+      "surface": "zbm_supplier_requests",
+      "declaration": {
+        "kind": "shortcode",
+        "source_path": "plugin/src/Integration/DokanPurchaseRequestEndpoint.php",
+        "surface": "zbm_supplier_requests",
+        "callback": "shortcode",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "shortcode",
+        "class": "Zarbalman\\Core\\Integration\\DokanPurchaseRequestEndpoint",
+        "callback": "shortcode",
+        "hook": "zbm_supplier_requests"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_registered_shortcodes_return_owner_reads_and_explicit_commercial_view_limitation",
+        "keys": [
+          "zbm_supplier_requests"
+        ]
+      },
+      "supplemental": [
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_supplier_requests",
+          "scenario": "authorized_dependency_control",
+          "test": "PaymentEndpointControlsTest::test_supplier_shortcode_exact_real_pinned_dependency_gate_preserves_financial_state"
+        }
+      ]
+    },
+    {
+      "id": "http-043",
+      "kind": "action",
+      "source_path": "plugin/src/Integration/DokanShippingRateSettings.php",
+      "surface": "admin_post_zbm_save_vendor_shipping_rate",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Integration/DokanShippingRateSettings.php",
+        "surface": "admin_post_zbm_save_vendor_shipping_rate",
+        "callback": "save",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Integration\\DokanShippingRateSettings",
+        "callback": "save",
+        "hook": "admin_post_zbm_save_vendor_shipping_rate"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_shipping_rate_add_update_delete_and_owner_scope",
+        "keys": [
+          "zbm_save_vendor_shipping_rate"
+        ]
+      }
+    },
+    {
+      "id": "http-044",
+      "kind": "action",
+      "source_path": "plugin/src/Integration/ZarinpalAdapter.php",
+      "surface": "wp_ajax_zpal_manual_verify",
+      "declaration": {
+        "kind": "action",
+        "source_path": "plugin/src/Integration/ZarinpalAdapter.php",
+        "surface": "wp_ajax_zpal_manual_verify",
+        "callback": "blockDependencyManualVerifyForManagedOrder",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "class": "Zarbalman\\Core\\Integration\\ZarinpalAdapter",
+        "callback": "blockDependencyManualVerifyForManagedOrder",
+        "hook": "wp_ajax_zpal_manual_verify"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_dependency_manual_verify_is_retired_for_real_managed_order",
+        "keys": [
+          "zpal_manual_verify"
+        ]
+      }
+    },
+    {
+      "id": "http-045",
+      "kind": "REST",
+      "source_path": "plugin/src/Rest/WorkflowController.php",
+      "surface": "GET /zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+      "declaration": {
+        "kind": "REST",
+        "source_path": "plugin/src/Rest/WorkflowController.php",
+        "surface": "GET /zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+        "callback": "get_workflow",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "REST",
+        "route": "/zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+        "method": "GET",
+        "class": "Zarbalman\\Core\\Rest\\WorkflowController",
+        "callback": "get_workflow"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_three_rest_methods_have_nonce_ownership_matrix_and_http_positives",
+        "keys": [
+          "REST GET /zarbalman/v1/orders/{id}/workflow"
+        ]
+      }
+    },
+    {
+      "id": "http-046",
+      "kind": "REST",
+      "source_path": "plugin/src/Rest/WorkflowController.php",
+      "surface": "POST /zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+      "declaration": {
+        "kind": "REST",
+        "source_path": "plugin/src/Rest/WorkflowController.php",
+        "surface": "POST /zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+        "callback": "transition",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "REST",
+        "route": "/zarbalman/v1/orders/(?P<id>\\d+)/workflow",
+        "method": "POST",
+        "class": "Zarbalman\\Core\\Rest\\WorkflowController",
+        "callback": "transition"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_three_rest_methods_have_nonce_ownership_matrix_and_http_positives",
+        "keys": [
+          "REST POST /zarbalman/v1/orders/{id}/workflow"
+        ]
+      }
+    },
+    {
+      "id": "http-047",
+      "kind": "REST",
+      "source_path": "plugin/src/Rest/WorkflowController.php",
+      "surface": "POST /zarbalman/v1/orders/(?P<id>\\d+)/workflow/control",
+      "declaration": {
+        "kind": "REST",
+        "source_path": "plugin/src/Rest/WorkflowController.php",
+        "surface": "POST /zarbalman/v1/orders/(?P<id>\\d+)/workflow/control",
+        "callback": "control",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "REST",
+        "route": "/zarbalman/v1/orders/(?P<id>\\d+)/workflow/control",
+        "method": "POST",
+        "class": "Zarbalman\\Core\\Rest\\WorkflowController",
+        "callback": "control"
+      },
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_three_rest_methods_have_nonce_ownership_matrix_and_http_positives",
+        "keys": [
+          "REST POST /zarbalman/v1/orders/{id}/workflow/control"
+        ]
+      }
+    },
+    {
+      "id": "http-048",
+      "kind": "form",
+      "source_path": "plugin/templates/buyer/request-form.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/buyer/request-form.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "34e4a7ef47786e9b17618407a0b6a2456f977dbf0e64b4accd89441cc8501456"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_create_purchase_request",
+        "class": "Zarbalman\\Core\\Frontend\\BuyerRequestController",
+        "callback": "handleCreate"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_buyer_creation_valid_form_reaches_real_commercial_dependency_denial",
+        "keys": [
+          "zbm_create_purchase_request"
+        ]
+      }
+    },
+    {
+      "id": "http-049",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "bb47854629debc271980b2873ad49709f6c6315cb1c44deb2b851b3312c0ce7b"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_extend_delivery"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_extend_delivery/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-050",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "5fcc3a4b63c1429ce3b3869672400c2e26e67f989c8cacea19460335c9a9277a"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_reopen_preparation"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_reopen_preparation/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-051",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "ced85793a57879904180f177c7004851829aaf81e13e4746db75d16d9c937c7b"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_resume",
+        "flow_pause"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_resume/admin-post.php",
+          "flow_pause/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-052",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-4",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-4",
+        "callback": "",
+        "fingerprint": "3ef50a692fa5fc83bee925876428537b1f849af50b3ace574ff68389f53991f1"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_note"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_note/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-053",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-5",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-5",
+        "callback": "",
+        "fingerprint": "a78339ba1cffdfe2cd15ea4547358d301bdb6b12005ee4dba30ad5f94a174ea8"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_refer_return"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_refer_return/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-054",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-6",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-6",
+        "callback": "",
+        "fingerprint": "ac0ce4d4e660dc8c6cb81795b71f2fe0b0c33a1f14ed61aa3c306898e51c3b78"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_extend"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_extend/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-055",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-7",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-7",
+        "callback": "",
+        "fingerprint": "96b42233f1b814942c1feda717356e0d0044b07b4a575755ed40252d60a79160"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_reopen_buyer"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_reopen_buyer/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-056",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-8",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-8",
+        "callback": "",
+        "fingerprint": "49155c89e75e6dd187ecb7470295775bbc7ad52b177cb2116725062d29b307b9"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_reopen_seller"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_reopen_seller/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-057",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-9",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-9",
+        "callback": "",
+        "fingerprint": "75173c3ff5a31b7b1e45e9a761335c94f700a660ac507dfed9b7b897bd3c97ca"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_set_final_weight"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_set_final_weight/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-058",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-10",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-10",
+        "callback": "",
+        "fingerprint": "71c1bd8018db75720ea069ee7043004c49007f39207dcb47b8fd8bd47513ce48"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_reissue_code"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_reissue_code/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-059",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-11",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-11",
+        "callback": "",
+        "fingerprint": "93a6951b42750e4d381804f4bcb575eaa10cf47a405ee59657bd258303809ee3"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_cancel"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_cancel/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-060",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/admin.php",
+      "surface": "form-12",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/admin.php",
+        "surface": "form-12",
+        "callback": "",
+        "fingerprint": "de37a17414d4c01c51481fe41ffb359ec5f91ea05bf157116b115e67548d9927"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "manual_credit_seller"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "manual_credit_seller/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-061",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "8d3dcd540f94abdf6d7e6f90ff072e1955b39951b840234cf8e885a5ab04757b"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_balance_start",
+        "class": "Zarbalman\\Core\\Http\\BalancePaymentController",
+        "callback": "start"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_balance_start_valid_delivered_paid_fixture_has_exact_gateway_denial",
+        "keys": [
+          "zbm_balance_start"
+        ]
+      },
+      "supplemental": [
+        {
+          "file": "http-payment-controls.json",
+          "endpoint": "zbm_balance_start",
+          "scenario": "authorized_dependency_control",
+          "test": "PaymentEndpointControlsTest::test_balance_start_is_payable_and_only_real_gateway_health_blocks_authorized_http"
+        }
+      ]
+    },
+    {
+      "id": "http-062",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "41afc97fd34245e859c0db73a8ba9455180679d6ed679e4bb696385f675e9f2f"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_accept_late",
+        "spec4_reverify"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_accept_late/admin-post.php",
+          "spec4_reverify/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-063",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "4e604f4c69289b5bd96934d0c27019ea14a29b0ebf1a8e1abd1621853a919db5"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_contact"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_contact/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-064",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-4",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-4",
+        "callback": "",
+        "fingerprint": "1c600b912f6bc7788b3b965c42c708fac9ee645a201937b3f5853cf74da17a93"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_confirm_return"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_confirm_return/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-065",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-5",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-5",
+        "callback": "",
+        "fingerprint": "7ada826494afcc231cd7e072b95e22a20ff419c533a0441068b10677cade4273"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_create_refund"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_create_refund/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-066",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-6",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-6",
+        "callback": "",
+        "fingerprint": "677f4e2188bdbf34429d2fac0e4bb2c4fba049d84ff68a54e2011da585b346a6"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_finance_destination",
+        "class": "Zarbalman\\Core\\Admin\\Spec4FinancePage",
+        "callback": "destination"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_finance_export_and_destination_have_exact_matrix_and_positive_controls",
+        "keys": [
+          "zbm_finance_destination"
+        ]
+      }
+    },
+    {
+      "id": "http-067",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-7",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-7",
+        "callback": "",
+        "fingerprint": "20d739113d4d105dbad72d8757f7cff888016445820f58753f521ec377bee215"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_approve_action",
+        "spec4_execute_action",
+        "spec4_reconcile_action"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_approve_action/admin-post.php",
+          "spec4_execute_action/admin-post.php",
+          "spec4_reconcile_action/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-068",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/finance.php",
+      "surface": "form-8",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/finance.php",
+        "surface": "form-8",
+        "callback": "",
+        "fingerprint": "e8052550a46f41bed7a29016a33c5a95b955be4d726cfbf9b8cbd3266ed917ec"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "spec4_fail_action"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "spec4_fail_action/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-069",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/payment.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/payment.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "751080b9ff082d5c5925c9b63a12b9a3369bdb33028af9fcfe7a16638c51d334"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "manual_offer"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "manual_offer/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-070",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/payment.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/payment.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "3b35b9b9072d0e49e328b9f8c0af67c458939048e99bb07152f883093a30450c"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "manual_receipt"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "manual_receipt/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-071",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/payment.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/payment.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "1cdab63cb48aa057f5ee61659a1abcb56d74c2e3de39a6fd5f2f38736e5bd225"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "manual_approve"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "manual_approve/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-072",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/payment.php",
+      "surface": "form-4",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/payment.php",
+        "surface": "form-4",
+        "callback": "",
+        "fingerprint": "5295b7a45c41fc9f88b433136664bd723977ced4c6e3b05cf4d11f7010decc6e"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "manual_reject"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "manual_reject/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-073",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "b36d821c977f81e0f41d58b1d05d27797b0335d646f59c1d886e1e4f7d4e5c5f"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_record_weight"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_record_weight/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-074",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "86fb6cb4c39fdc5d698ead3054d5012ff9e06b4e43a6c242c58bc0cedadf46d0"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_ready_pickup",
+        "flow_ready_delivery"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_ready_pickup/admin-post.php",
+          "flow_ready_delivery/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-075",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "d0b8a619502a67f04853310fe1ed2fe3abed5af188690173dabeccf5671d4e03"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_dispatch"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_dispatch/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-076",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-4",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-4",
+        "callback": "",
+        "fingerprint": "259468ed367cfe03fe66c526f23ea6fa75bd48b7a56462528e351efc44ffda6e"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_deliver"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_deliver/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-077",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-5",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-5",
+        "callback": "",
+        "fingerprint": "083380832c530302b26562c7eb345cdbe6147f05ad3a3ddf35503fe7d9334ffa"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_propose_weight"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_propose_weight/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-078",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-6",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-6",
+        "callback": "",
+        "fingerprint": "fa460851973bf4efb5c476040d7104521cbe593154cb0207a694bf0818c17617"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_accept_weight"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_accept_weight/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-079",
+      "kind": "form",
+      "source_path": "plugin/templates/managed/weights.php",
+      "surface": "form-7",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/managed/weights.php",
+        "surface": "form-7",
+        "callback": "",
+        "fingerprint": "3f9ee101bce949666323759db7ddea816f8d3c42251599e2c5a57cebfe0aeaf6"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_managed_case_action",
+        "class": "Zarbalman\\Core\\Http\\ManagedCaseActionController",
+        "callback": "handle"
+      },
+      "operations": [
+        "flow_object"
+      ],
+      "coverage": {
+        "type": "managed",
+        "test": "ManagedHttpMatrixTest::test_operation_positive_or_explicit_dependency_control_and_six_rejections",
+        "keys": [
+          "flow_object/admin-post.php"
+        ]
+      }
+    },
+    {
+      "id": "http-080",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/reports.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/reports.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "3ba5068a65a028b90769485e484f3f402230202802524d1b196c5dbe56f72958"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "dokan_load_custom_template",
+        "class": "Zarbalman\\Core\\Integration\\DokanVendorReportsEndpoint",
+        "callback": "loadTemplate"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_approved_vendor_reports_allow_own_report_and_ignore_target_vendor_parameter",
+        "scenario": "approved-vendor-reports-isolation",
+        "positive": [
+          "vendor_1",
+          "vendor_2"
+        ],
+        "negative": [
+          "guest",
+          "buyer"
+        ]
+      }
+    },
+    {
+      "id": "http-081",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/request-detail.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/request-detail.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "fef29f58f1ecf667051b28ed8c03b7aeae17ff72882f209582fd24ff6b4ad3ae"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_vendor_request_decision",
+        "class": "Zarbalman\\Core\\Frontend\\VendorRequestController",
+        "callback": "handle"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_decisions_use_valid_owned_fixtures_and_exact_dependency_limitation",
+        "keys": [
+          "zbm_vendor_request_decision/accept"
+        ]
+      }
+    },
+    {
+      "id": "http-082",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/request-detail.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/request-detail.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "7f7c5fc31a69ba2c9f42c7b08116f80bab61f2fa6e6ac5edef559754b9935e7c"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_vendor_request_decision",
+        "class": "Zarbalman\\Core\\Frontend\\VendorRequestController",
+        "callback": "handle"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_decisions_use_valid_owned_fixtures_and_exact_dependency_limitation",
+        "keys": [
+          "zbm_vendor_request_decision/reject"
+        ]
+      }
+    },
+    {
+      "id": "http-083",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/shipping-rates.php",
+      "surface": "form-1",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/shipping-rates.php",
+        "surface": "form-1",
+        "callback": "",
+        "fingerprint": "7d267c3dcc578b2f42eb769a7006441a8d427d40593e0f29950a3823f07b1407"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_save_vendor_shipping_rate",
+        "class": "Zarbalman\\Core\\Integration\\DokanShippingRateSettings",
+        "callback": "save"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_shipping_rate_add_update_delete_and_owner_scope",
+        "keys": [
+          "zbm_save_vendor_shipping_rate"
+        ]
+      }
+    },
+    {
+      "id": "http-084",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/shipping-rates.php",
+      "surface": "form-2",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/shipping-rates.php",
+        "surface": "form-2",
+        "callback": "",
+        "fingerprint": "7397c8822b2e2b6b9cd0f6d0af71fca5a4e50a501d8adefeb3d645edad4f3891"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_save_vendor_shipping_rate",
+        "class": "Zarbalman\\Core\\Integration\\DokanShippingRateSettings",
+        "callback": "save"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_shipping_rate_add_update_delete_and_owner_scope",
+        "keys": [
+          "zbm_save_vendor_shipping_rate"
+        ]
+      }
+    },
+    {
+      "id": "http-085",
+      "kind": "form",
+      "source_path": "plugin/templates/vendor/shipping-rates.php",
+      "surface": "form-3",
+      "declaration": {
+        "kind": "form",
+        "source_path": "plugin/templates/vendor/shipping-rates.php",
+        "surface": "form-3",
+        "callback": "",
+        "fingerprint": "8ad5dffb8f00a20e81a35c4f404a5274370e008de84a3ca50e7f7b52465b73e7"
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "action",
+        "hook": "admin_post_zbm_save_vendor_shipping_rate",
+        "class": "Zarbalman\\Core\\Integration\\DokanShippingRateSettings",
+        "callback": "save"
+      },
+      "operations": [],
+      "coverage": {
+        "type": "remaining",
+        "test": "RemainingEndpointsTest::test_vendor_shipping_rate_add_update_delete_and_owner_scope",
+        "keys": [
+          "zbm_save_vendor_shipping_rate"
+        ]
+      }
+    },
+    {
+      "id": "http-086",
+      "kind": "Dokan view",
+      "source_path": "plugin/src/Integration/DokanVendorReportsEndpoint.php",
+      "surface": "dokan:zbm-vendor-reports",
+      "declaration": {
+        "kind": "Dokan view",
+        "source_path": "plugin/src/Integration/DokanVendorReportsEndpoint.php",
+        "surface": "dokan:zbm-vendor-reports",
+        "callback": "loadTemplate",
+        "fingerprint": ""
+      },
+      "expected_registered": true,
+      "target": {
+        "kind": "Dokan view",
+        "class": "Zarbalman\\Core\\Integration\\DokanVendorReportsEndpoint",
+        "callback": "loadTemplate",
+        "hook": "dokan_load_custom_template"
+      },
+      "coverage": {
+        "type": "additional",
+        "test": "AdditionalEndpointsTest::test_approved_vendor_reports_allow_own_report_and_ignore_target_vendor_parameter",
+        "scenario": "approved-vendor-reports-isolation",
+        "positive": [
+          "vendor_1",
+          "vendor_2"
+        ],
+        "negative": [
+          "guest",
+          "buyer"
+        ]
+      }
+    }
+  ],
+  "discovery_order": [
+    "http-001",
+    "http-002",
+    "http-003",
+    "http-004",
+    "http-005",
+    "http-006",
+    "http-007",
+    "http-008",
+    "http-009",
+    "http-010",
+    "http-011",
+    "http-012",
+    "http-013",
+    "http-014",
+    "http-015",
+    "http-016",
+    "http-017",
+    "http-018",
+    "http-019",
+    "http-020",
+    "http-021",
+    "http-022",
+    "http-023",
+    "http-024",
+    "http-025",
+    "http-026",
+    "http-027",
+    "http-028",
+    "http-029",
+    "http-030",
+    "http-031",
+    "http-032",
+    "http-033",
+    "http-034",
+    "http-035",
+    "http-036",
+    "http-037",
+    "http-038",
+    "http-039",
+    "http-040",
+    "http-041",
+    "http-042",
+    "http-043",
+    "http-086",
+    "http-044",
+    "http-045",
+    "http-046",
+    "http-047",
+    "http-048",
+    "http-049",
+    "http-050",
+    "http-051",
+    "http-052",
+    "http-053",
+    "http-054",
+    "http-055",
+    "http-056",
+    "http-057",
+    "http-058",
+    "http-059",
+    "http-060",
+    "http-061",
+    "http-062",
+    "http-063",
+    "http-064",
+    "http-065",
+    "http-066",
+    "http-067",
+    "http-068",
+    "http-069",
+    "http-070",
+    "http-071",
+    "http-072",
+    "http-073",
+    "http-074",
+    "http-075",
+    "http-076",
+    "http-077",
+    "http-078",
+    "http-079",
+    "http-080",
+    "http-081",
+    "http-082",
+    "http-083",
+    "http-084",
+    "http-085"
+  ]
+}
