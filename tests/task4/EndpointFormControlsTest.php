@@ -55,6 +55,18 @@ final class EndpointFormControlsTest extends TestCase {
             'actual_http' => true, 'catalog_ids' => [$this->catalogId], 'test' => $this->testMethod] + $details;
         self::write($rows);
     }
+    /** Persist only safe response metadata before assertions, including on failed controls. */
+    private function diagnose(string $scenario, array $http, array $details): void {
+        $location = Task4EndpointHttp::header($http, 'Location');
+        $query = []; parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $rows = json_decode((string) file_get_contents(self::EVIDENCE), true, 32, JSON_THROW_ON_ERROR);
+        $rows[$this->catalogId]['diagnostics'][$scenario] = ['actual_http' => true, 'http' => $http['status'],
+            'redirect_path' => (string) parse_url($location, PHP_URL_PATH),
+            'redirect_query_keys' => array_keys($query),
+            'redirect_is_local_home' => $location !== '' && $location === home_url(),
+            'body_bytes' => strlen($http['body'])] + $details;
+        self::write($rows);
+    }
     private function user(string $name): int {
         $user = get_user_by('login', 'zbm_test_' . $name); self::assertInstanceOf(WP_User::class, $user);
         return (int) $user->ID;
@@ -81,6 +93,12 @@ final class EndpointFormControlsTest extends TestCase {
         }
         return $snapshot;
     }
+    private function idempotencyRows(): array {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare('SELECT * FROM %i ORDER BY key_hash', (new Schema($wpdb))->idempotency_table()), ARRAY_A);
+        self::assertSame('', $wpdb->last_error); self::assertIsArray($rows);
+        return array_column($rows, null, 'key_hash');
+    }
     private function unchangedExcept(array $before, array $after, array $allowed): void {
         self::assertSame(array_keys($before), array_keys($after));
         foreach ($before as $table => $hash) {
@@ -96,6 +114,46 @@ final class EndpointFormControlsTest extends TestCase {
         self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
         self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
         self::assertStringEndsWith('/wp-login.php', (string) parse_url($location, PHP_URL_PATH));
+    }
+    /** Verify the native pinned dependency gate rather than accepting an arbitrary redirect. */
+    private function dokanOptionsDenial(array $http, string $actor, string $nonce): array {
+        self::assertTrue(defined('DOKAN_PLUGIN_VERSION')); self::assertSame('5.0.10', DOKAN_PLUGIN_VERSION);
+        self::assertTrue(class_exists(\WeDevs\Dokan\Core::class));
+        global $wp_filter;
+        $priority = null;
+        foreach ($wp_filter['admin_init']->callbacks as $hookPriority => $callbacks) {
+            foreach ($callbacks as $entry) {
+                $callback = $entry['function'];
+                if (is_array($callback) && $callback[0] instanceof \WeDevs\Dokan\Core && $callback[1] === 'block_admin_access') { $priority = $hookPriority; }
+            }
+        }
+        self::assertSame(10, $priority);
+        $method = new ReflectionMethod(\WeDevs\Dokan\Core::class, 'block_admin_access'); $path = $method->getFileName();
+        self::assertIsString($path); self::assertStringEndsWith('/dokan-lite/includes/Core.php', $path);
+        $lines = file($path); self::assertIsArray($lines);
+        $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+        $compact = preg_replace('/\s+/', '', $source); self::assertIsString($compact);
+        self::assertStringContainsString("\$no_access=dokan_get_option('admin_access','dokan_general','on');", $compact);
+        self::assertStringContainsString("if(OrderUtil::is_hpos_enabled()){\$no_access='on';}", $compact);
+        self::assertStringContainsString("\$valid_pages=['admin-ajax.php','admin-post.php','async-upload.php','media-upload.php'];", $compact);
+        self::assertStringContainsString('$user_role=reset($current_user->roles);', $compact);
+        self::assertStringContainsString("if(('on'===\$no_access)&&(!in_array(\$pagenow,\$valid_pages,true))&&in_array(\$user_role,['seller','customer','vendor_staff'],true)){wp_safe_redirect(home_url());exit;}", $compact);
+        $hpos = \Automattic\WooCommerce\Utilities\OrderUtil::is_hpos_enabled(); self::assertTrue($hpos);
+        $configured = dokan_get_option('admin_access', 'dokan_general', 'on'); $effective = $hpos ? 'on' : $configured;
+        self::assertSame('on', $effective);
+        $user = get_userdata($this->user($actor)); self::assertInstanceOf(WP_User::class, $user);
+        $roles = $user->roles; $primary = reset($roles); self::assertContains($primary, ['customer', 'seller', 'vendor_staff']);
+        self::assertFalse(user_can($user, 'manage_options')); self::assertNotFalse(wp_verify_nonce($nonce, 'zbm_core_spec3-options'));
+        self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
+        self::assertSame(home_url(), $location); self::assertSame($location, wp_validate_redirect($location, ''));
+        return ['dependency_version' => DOKAN_PLUGIN_VERSION, 'hook' => 'admin_init',
+            'callback' => 'WeDevs\\Dokan\\Core::block_admin_access', 'registered' => true, 'priority' => $priority,
+            'source_path' => $path, 'source_contract_verified' => true, 'hpos_enabled' => $hpos,
+            'configured_admin_access' => $configured, 'effective_admin_access' => $effective,
+            'actor_roles' => $roles, 'primary_role' => $primary, 'manage_options' => false,
+            'request_page' => 'options.php', 'page_exempt' => false, 'nonce_verified' => true,
+            'redirect_is_local_home' => true, 'redirect_url' => $location, 'home_url' => home_url(),
+            'home_path' => (string) parse_url(home_url(), PHP_URL_PATH), 'redirect_path' => (string) parse_url($location, PHP_URL_PATH)];
     }
     private function result(array $http, string $expected): void {
         self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
@@ -185,13 +243,19 @@ final class EndpointFormControlsTest extends TestCase {
     }
 
     public function test_settings_actual_options_form_commits_sanitized_values_and_preserves_named_denials(): void {
+        $admin = get_userdata($this->user('admin')); self::assertInstanceOf(WP_User::class, $admin);
+        $originalManageOptions = $admin->caps['manage_options'] ?? null;
+        $restoreCapability = static function () use ($admin, $originalManageOptions): void {
+            if ($originalManageOptions === null) { $admin->remove_cap('manage_options'); }
+            else { $admin->add_cap('manage_options', $originalManageOptions); }
+        };
         $old = ['zbm_core_delivery_reminder_minutes' => Task4EndpointHttp::option('zbm_core_delivery_reminder_minutes'),
             'zbm_core_sms_templates' => Task4EndpointHttp::option('zbm_core_sms_templates')];
         try {
-            $this->catalog('http-016', __METHOD__, function (): array {
+            $this->catalog('http-016', __METHOD__, function () use ($admin, $restoreCapability): array {
                 $this->primeAdmin();
                 foreach (['authorized_positive', 'zero_disabled', 'minimum_five', 'maximum_1440', 'wrong_role', 'other_buyer', 'other_vendor',
-                    'guest', 'no_nonce', 'invalid_nonce', 'below_range', 'above_range', 'invalid_integer'] as $scenario) {
+                    'guest', 'capability_denied', 'no_nonce', 'invalid_nonce', 'below_range', 'above_range', 'invalid_integer'] as $scenario) {
                     $this->auth('admin', 'unused-setting-fixture');
                     $this->restoreOption('zbm_core_delivery_reminder_minutes', 60); $this->restoreOption('zbm_core_sms_templates', []);
                     [$adminCookie] = $this->auth('admin', 'zbm_core_spec3-options');
@@ -211,15 +275,41 @@ final class EndpointFormControlsTest extends TestCase {
                     $fields['zbm_core_sms_templates[unknown_synthetic_template]'] = 'must not persist';
                     if ($scenario === 'no_nonce') { unset($fields['_wpnonce']); }
                     if ($scenario === 'invalid_nonce') { $fields['_wpnonce'] = 'invalid'; }
+                    $capabilityContract = null;
+                    if ($scenario === 'capability_denied') {
+                        $admin->add_cap('manage_options', false);
+                        self::assertFalse(user_can($admin, 'manage_options')); self::assertTrue(user_can($admin, 'manage_woocommerce'));
+                        self::assertSame(['administrator'], $admin->roles);
+                        self::assertSame('manage_options', apply_filters('option_page_capability_zbm_core_spec3', 'manage_options'));
+                        $capabilityContract = ['actor_roles' => $admin->roles, 'manage_options' => false, 'manage_woocommerce' => true,
+                            'option_page_capability' => 'manage_options', 'nonce_verified' => wp_verify_nonce($nonce, 'zbm_core_spec3-options') !== false,
+                            'per_user_cap_override' => true];
+                        self::assertTrue($capabilityContract['nonce_verified']);
+                    }
                     $before = $this->snapshot();
                     $beforeOptions = ['zbm_core_delivery_reminder_minutes' => Task4EndpointHttp::option('zbm_core_delivery_reminder_minutes'),
                         'zbm_core_sms_templates' => Task4EndpointHttp::option('zbm_core_sms_templates')];
-                    $http = Task4RemainingHttp::request('POST', 'wp-admin/options.php', $fields, $cookie);
-                    $notice = null; $message = ''; $invalid = in_array($scenario, ['below_range', 'above_range', 'invalid_integer'], true);
-                    $denied = $actor !== 'admin' || in_array($scenario, ['no_nonce', 'invalid_nonce'], true);
+                    try { $http = Task4RemainingHttp::request('POST', 'wp-admin/options.php', $fields, $cookie); }
+                    finally { if ($scenario === 'capability_denied') { $restoreCapability(); } }
+                    if ($capabilityContract !== null) {
+                        self::assertTrue(user_can(get_userdata($this->user('admin')), 'manage_options'));
+                        $capabilityContract['capability_restored'] = true;
+                    }
+                    $this->diagnose($scenario, $http, ['actor' => $actor,
+                        'actor_roles' => $actor === 'guest' ? [] : get_userdata($this->user($actor))->roles,
+                        'manage_options' => $capabilityContract !== null ? false : ($actor !== 'guest' && user_can($this->user($actor), 'manage_options')),
+                        'nonce_valid' => $actor !== 'guest' && !in_array($scenario, ['no_nonce', 'invalid_nonce'], true),
+                        'before_snapshot' => $before, 'after_snapshot' => $this->snapshot(),
+                        'before_options' => $beforeOptions,
+                        'after_options' => ['zbm_core_delivery_reminder_minutes' => Task4EndpointHttp::option('zbm_core_delivery_reminder_minutes'),
+                            'zbm_core_sms_templates' => Task4EndpointHttp::option('zbm_core_sms_templates')]]);
+                    $notice = null; $message = ''; $upstreamContract = null; $denialLayer = null;
+                    $invalid = in_array($scenario, ['below_range', 'above_range', 'invalid_integer'], true);
+                    $denied = $actor !== 'admin' || in_array($scenario, ['capability_denied', 'no_nonce', 'invalid_nonce'], true);
                     if ($actor === 'guest') { $this->loginRedirect($http); $message = 'authentication_redirect_to_local_wp_login'; }
-                    elseif ($actor !== 'admin') { $message = __('Sorry, you are not allowed to manage options for this site.'); $this->bodyMessage($http, 403, $message); }
-                    elseif (in_array($scenario, ['no_nonce', 'invalid_nonce'], true)) { $message = __('The link you followed has expired.'); $this->bodyMessage($http, 403, $message); }
+                    elseif ($actor !== 'admin') { $upstreamContract = $this->dokanOptionsDenial($http, $actor, $nonce); $message = 'dokan_block_admin_access_local_home_redirect'; $denialLayer = 'dokan_admin_init'; }
+                    elseif ($scenario === 'capability_denied') { $message = __('Sorry, you are not allowed to manage options for this site.'); $this->bodyMessage($http, 403, $message); $denialLayer = 'wordpress_options_capability'; }
+                    elseif (in_array($scenario, ['no_nonce', 'invalid_nonce'], true)) { $message = __('The link you followed has expired.'); $this->bodyMessage($http, 403, $message); $denialLayer = 'wordpress_options_nonce'; }
                     else {
                         self::assertSame(302, $http['status']);
                         $location = Task4EndpointHttp::header($http, 'Location'); self::assertSame($location, wp_validate_redirect($location, ''));
@@ -239,10 +329,14 @@ final class EndpointFormControlsTest extends TestCase {
                     if ($denied) { self::assertSame($before, $after); }
                     else { $this->unchangedExcept($before, $after, ['option:zbm_core_delivery_reminder_minutes', 'option:zbm_core_sms_templates']); self::assertNotSame($before, $after); }
                     $this->record($scenario, ['type' => $denied ? 'validation' : 'mutation', 'proof_type' => $denied ? 'validation' : 'mutation',
-                        'http' => $http['status'], 'actor' => $actor, 'actor_valid' => $actor === 'admin',
+                        'http' => $http['status'], 'actor' => $actor, 'actor_valid' => $actor === 'admin' && $scenario !== 'capability_denied',
                         'nonce_valid' => $actor !== 'guest' && !in_array($scenario, ['no_nonce', 'invalid_nonce'], true),
                         'persisted_assertions' => true, 'financial_unchanged' => true, 'before_snapshot' => $before, 'after_snapshot' => $after,
-                        'message' => $message, 'notice' => $notice, 'observed_response' => ['message' => $message, 'notice' => $notice],
+                        'message' => $message, 'notice' => $notice, 'denial_layer' => $denialLayer,
+                        'upstream_contract' => $upstreamContract, 'capability_contract' => $capabilityContract,
+                        'observed_response' => ['message' => $message, 'notice' => $notice,
+                            'redirect_path' => (string) parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH),
+                            'redirect_is_local_home' => $upstreamContract !== null],
                         'stored_minutes' => (int) $storedMinutes, 'stored_templates' => $templates,
                         'before_options' => $beforeOptions, 'after_options' => ['zbm_core_delivery_reminder_minutes' => $storedMinutes, 'zbm_core_sms_templates' => $templates],
                         'verified_settings' => true,
@@ -251,6 +345,7 @@ final class EndpointFormControlsTest extends TestCase {
                 return ['type' => 'mutation', 'proof_type' => 'mutation', 'covered_operations' => ['settings_save', 'reminder_0_5_1440', 'template_sanitization']];
             });
         } finally {
+            $restoreCapability();
             $this->auth('admin', 'unused-setting-restore');
             foreach ($old as $option => $value) { $this->restoreOption($option, $value ?? ($option === 'zbm_core_sms_templates' ? [] : 60)); }
         }
@@ -279,7 +374,7 @@ final class EndpointFormControlsTest extends TestCase {
                 if ($scenario === 'invalid_nonce') { $fields['_zbm_nonce'] = 'invalid'; }
                 if ($scenario === 'missing_reason') { $fields['reason'] = ''; }
                 if ($scenario === 'stale_version') { $fields['version'] = '9'; }
-                $before = $this->snapshot(); $rendererDenial = null;
+                $before = $this->snapshot(); $idempotencyBefore = $this->idempotencyRows(); $rendererDenial = null;
                 if ($actor === 'guest') {
                     $guest = Task4EndpointHttp::get('wp-admin/admin.php', ['page' => 'zbm-core-requests'], ''); $this->loginRedirect($guest); $rendererDenial = 'local_wp_login_redirect';
                     $guestAfter = $this->snapshot(); self::assertSame($before, $guestAfter);
@@ -298,14 +393,29 @@ final class EndpointFormControlsTest extends TestCase {
                     $message = match ($scenario) { 'missing_reason' => 'دسترسی، درخواست یا دلیل مدیریت معتبر نیست.', 'stale_version' => 'وضعیت کنترل مدیریت تغییر کرده است؛ صفحه را تازه کنید.', default => 'عملیات مدیریت همراه با دلیل و سابقه حسابرسی ثبت شد.' };
                     self::assertSame($message, $notice['message']); self::assertSame($scenario === 'authorized_positive' ? 'success' : 'error', $notice['type']);
                 }
-                $fresh = $repos['requests']->find($id); self::assertNotNull($fresh); $after = $this->snapshot();
+                $fresh = $repos['requests']->find($id); self::assertNotNull($fresh); $after = $this->snapshot(); $idempotencyProof = null;
                 if ($scenario === 'authorized_positive') {
                     self::assertTrue($fresh->isPaused()); self::assertSame(1, $fresh->version()); self::assertSame('supplier_review', $fresh->state());
                     self::assertSame($request->requestNumber(), $fresh->requestNumber()); self::assertNull($fresh->supplierDeadlineGmt()); self::assertGreaterThan(0, $fresh->pausedRemainingSeconds());
                     global $wpdb; $schema = new Schema($wpdb);
-                    $events = $wpdb->get_results($wpdb->prepare('SELECT event_key,actor_user_id,metadata_json FROM %i WHERE resource_id=%d AND event_key=%s', $schema->audit_table(), $id, 'request_paused'), ARRAY_A);
-                    self::assertCount(1, $events); self::assertSame($this->user('admin'), (int) $events[0]['actor_user_id']); self::assertSame($fields['reason'], json_decode($events[0]['metadata_json'], true)['reason']);
-                    $this->unchangedExcept($before, $after, [$schema->purchase_requests_table(), $schema->audit_table(), $schema->notification_outbox_table()]); self::assertNotSame($before, $after);
+                    $events = $wpdb->get_results($wpdb->prepare('SELECT event_uuid,event_key,resource_type,resource_id,actor_type,actor_user_id,from_state,to_state,correlation_id,metadata_json FROM %i WHERE resource_id=%d AND event_key=%s', $schema->audit_table(), $id, 'request_paused'), ARRAY_A);
+                    self::assertSame('', $wpdb->last_error); self::assertCount(1, $events);
+                    $event = $events[0]; self::assertSame('request', $event['resource_type']); self::assertSame($id, (int) $event['resource_id']);
+                    self::assertSame('admin', $event['actor_type']); self::assertSame($this->user('admin'), (int) $event['actor_user_id']);
+                    self::assertSame('supplier_review', $event['from_state']); self::assertSame('supplier_review', $event['to_state']);
+                    self::assertTrue(wp_is_uuid($event['event_uuid'])); self::assertTrue(wp_is_uuid($event['correlation_id']));
+                    self::assertSame($fields['reason'], json_decode($event['metadata_json'], true, 32, JSON_THROW_ON_ERROR)['reason']);
+                    $idempotencyAfter = $this->idempotencyRows(); self::assertCount(count($idempotencyBefore) + 1, $idempotencyAfter);
+                    foreach ($idempotencyBefore as $key => $row) { self::assertArrayHasKey($key, $idempotencyAfter); self::assertSame($row, $idempotencyAfter[$key], 'Existing idempotency row changed.'); }
+                    $appended = array_diff_key($idempotencyAfter, $idempotencyBefore); self::assertCount(1, $appended); $command = reset($appended);
+                    self::assertSame('purchase_request_transition', $command['namespace']); self::assertSame('completed', $command['status']);
+                    self::assertSame($id, (int) $command['result_resource_id']); self::assertSame($event['event_uuid'], $command['result_event_uuid']);
+                    self::assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $command['key_hash']); self::assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $command['payload_hash']);
+                    $idempotencyProof = ['appended_rows' => 1, 'existing_rows_unchanged' => true, 'namespace' => $command['namespace'],
+                        'status' => $command['status'], 'result_resource_id' => (int) $command['result_resource_id'],
+                        'result_event_uuid' => $command['result_event_uuid'], 'audit_event_uuid' => $event['event_uuid'],
+                        'audit_correlation_id' => $event['correlation_id'], 'audit_actor_user_id' => (int) $event['actor_user_id'], 'audit_reason' => $fields['reason']];
+                    $this->unchangedExcept($before, $after, [$schema->purchase_requests_table(), $schema->audit_table(), $schema->notification_outbox_table(), $schema->idempotency_table()]); self::assertNotSame($before, $after);
                 } else { self::assertFalse($fresh->isPaused()); self::assertSame(0, $fresh->version()); self::assertSame($before, $after); }
                 $this->record($scenario, ['type' => $scenario === 'authorized_positive' ? 'mutation' : 'validation', 'proof_type' => 'mutation', 'http' => $http['status'],
                     'actor' => $actor, 'actor_valid' => $actor === 'admin',
@@ -313,6 +423,8 @@ final class EndpointFormControlsTest extends TestCase {
                     'financial_unchanged' => true, 'before_snapshot' => $before, 'after_snapshot' => $after, 'message' => $message, 'notice' => $notice,
                     'observed_response' => ['message' => $message, 'notice' => $notice, 'renderer_denial' => $rendererDenial],
                     'before_version' => 0, 'after_version' => $fresh->version(), 'is_paused' => $fresh->isPaused(),
+                    'idempotency_assertions' => $idempotencyProof,
+                    'request_id' => $id,
                     'generic_dispatcher_only' => $actor === 'guest',
                     'effect' => $scenario === 'authorized_positive' ? 'actual pause form persisted pause/version/deadline and exact actor/reason audit; all financial/orders unchanged' : ($actor === 'guest' ? 'POST stopped at dispatcher; capability/nonce handler checks unproved for guest' : 'named denial with no business/audit/order write')]);
             }

@@ -609,6 +609,15 @@
           "key": "http-016",
           "test": "EndpointFormControlsTest::test_settings_actual_options_form_commits_sanitized_values_and_preserves_named_denials"
         }
+      ],
+      "required_scenarios": [
+        "guest",
+        "wrong_role",
+        "other_buyer",
+        "other_vendor",
+        "no_nonce",
+        "invalid_nonce",
+        "capability_denied"
       ]
     },
     {

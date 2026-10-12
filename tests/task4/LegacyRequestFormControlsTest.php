@@ -15,6 +15,7 @@ use Zarbalman\Core\Integration\{ManagedOrderSnapshot, YithDepositAdapter};
 /** Historical, internally consistent fixtures; no provider/dependency stand-ins. */
 final class LegacyRequestFormControlsTest extends TestCase {
     private const EVIDENCE = __DIR__ . '/../../evidence/http-legacy-request-form-controls.json';
+    private const DIAGNOSTICS = __DIR__ . '/../../evidence/legacy-request-fixture-diagnostics.json';
     private array $previous = [];
 
     public static function setUpBeforeClass(): void {
@@ -22,6 +23,7 @@ final class LegacyRequestFormControlsTest extends TestCase {
         self::write(['_meta' => ['schema_version' => 1, 'run_id' => getenv('GITHUB_RUN_ID') ?: 'local',
             'run_attempt' => getenv('GITHUB_RUN_ATTEMPT') ?: 'local', 'created_at_gmt' => gmdate('c')],
             'http-014' => ['state' => 'pending', 'controls' => []], 'http-015' => ['state' => 'pending', 'controls' => []]]);
+        self::assertNotFalse(file_put_contents(self::DIAGNOSTICS, '{}', LOCK_EX));
     }
     protected function setUp(): void {
         parent::setUp();
@@ -122,6 +124,105 @@ final class LegacyRequestFormControlsTest extends TestCase {
         return array_intersect_key($snapshot, array_flip($keys));
     }
 
+    /** Diagnostic evidence is deliberately separate from actual-HTTP control evidence. */
+    private function diagnose(string $key, array $details): void {
+        $rows = json_decode((string) file_get_contents(self::DIAGNOSTICS), true, 32, JSON_THROW_ON_ERROR);
+        $rows[$key] = ['actual_http' => false, 'control_success_claimed' => false] + $details;
+        $json = wp_json_encode($rows, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        self::assertSame(strlen($json), file_put_contents(self::DIAGNOSTICS, $json, LOCK_EX));
+    }
+    private function registeredCreator(): Zarbalman\Core\Integration\WooCommerceOrderAdapter {
+        $registration = $GLOBALS['wp_filter']['admin_post_zbm_admin_request_control']; $creator = null;
+        foreach ($registration->callbacks as $callbacks) { foreach ($callbacks as $callback) {
+            $target = $callback['function'];
+            if (is_array($target) && ($target[0] ?? null) instanceof Zarbalman\Core\Admin\PurchaseRequestAdmin) {
+                $advance = (new ReflectionProperty($target[0], 'test_advance'))->getValue($target[0]);
+                $creator = (new ReflectionProperty($advance, 'order_creator'))->getValue($advance);
+            }
+        } }
+        self::assertInstanceOf(Zarbalman\Core\Integration\WooCommerceOrderAdapter::class, $creator); return $creator;
+    }
+    /** Store exact amounts and enum facts; private identity/contact fields are presence flags only. */
+    private function snapshotDiagnostic(WC_Order $order, $request): array {
+        $pairs = [];
+        $integer = static function (mixed $value): ?int {
+            $value = trim((string) $value);
+            return preg_match('/\A([0-9]+)(?:\.0+)?\z/', $value) === 1 ? (int) $value : null;
+        };
+        $pair = static function (string $key, mixed $actual, mixed $expected) use (&$pairs): void {
+            $pairs[$key] = ['actual' => $actual, 'expected' => $expected, 'matches' => $actual === $expected];
+        };
+        foreach (['customer_id' => $request->buyerId(), 'total' => $request->depositToman(), 'shipping_total' => 0, 'total_tax' => 0, 'discount_total' => 0] as $key => $expected) {
+            $getter = 'get_' . $key; $pair($key, $integer($order->$getter()), $expected);
+        }
+        foreach (['_zbm_request_id' => $request->id(), '_zbm_vendor_id' => $request->vendorId(), '_dokan_vendor_id' => $request->vendorId(),
+            '_zbm_estimated_total_toman' => $request->estimatedTotalToman(), '_zbm_deposit_toman' => $request->depositToman(),
+            '_zbm_reference_weight_tenths' => $request->referenceWeightTenths(), '_zbm_pricing_version' => $request->pricingVersion(),
+            '_zbm_estimated_shipping_toman' => $request->estimatedShippingToman(), '_zbm_shipping_rate_per_kg_toman' => $request->shippingRatePerKgToman(),
+            '_zbm_estimated_gross_toman' => $request->estimatedGrossToman()] as $key => $expected) {
+            $actual = $order->get_meta($key, true); $pair($key, $integer($actual), $expected);
+        }
+        $safeEnum = static fn (mixed $value): string => in_array((string) $value, ['', 'yes', 'no', 'live', 'test', 'test_pending', 'online', 'manual_bank', 'invalid', 'pending', 'processing', 'completed', 'cancelled', 'failed', 'refunded', 'on-hold', 'WC_ZPal', 'zbm_manual_bank', 'IRT', 'IRR', 'zarbalman-core-spec3', 'core'], true) ? (string) $value : '[unexpected enum]';
+        $pair('created_via', $safeEnum($order->get_created_via()), 'zarbalman-core-spec3');
+        $pair('currency', $safeEnum($order->get_currency()), 'IRT');
+        $pair('payment_method', $safeEnum($order->get_payment_method()), 'WC_ZPal');
+        $pair('route', $safeEnum(ManagedOrderSnapshot::route($order)), $request->isTest() ? 'test' : 'online');
+        foreach (['_zbm_managed_order' => 'yes', '_zbm_execution_mode' => $request->isTest() ? 'test' : 'live',
+            '_zbm_test_advance' => $request->isTest() ? 'yes' : 'no', '_zbm_authoritative_wc_status' => $order->get_status()] as $key => $expected) {
+            $pair($key, $safeEnum($order->get_meta($key, true)), $safeEnum($expected));
+        }
+        $pair('request_public_id_matches', hash_equals($request->publicId(), (string) $order->get_meta('_zbm_request_public_id', true)), true);
+        $privatePresence = [];
+        foreach (['billing_first_name', 'billing_last_name', 'billing_company', 'billing_address_1', 'billing_address_2', 'billing_city', 'billing_state', 'billing_postcode', 'billing_country', 'billing_email', 'billing_phone',
+            'shipping_first_name', 'shipping_last_name', 'shipping_company', 'shipping_address_1', 'shipping_address_2', 'shipping_city', 'shipping_state', 'shipping_postcode', 'shipping_country', 'shipping_phone', 'customer_note', 'customer_ip_address', 'customer_user_agent'] as $key) {
+            $getter = 'get_' . $key; $privatePresence[$key] = trim((string) $order->$getter()) !== '';
+        }
+        $items = [];
+        foreach ($order->get_items('line_item') as $item) {
+            $values = [];
+            foreach (['product_id' => $request->productId(), 'variation_id' => $request->variationId(), 'quantity' => $request->quantity(), 'subtotal' => $request->estimatedGrossToman(), 'total' => $request->depositToman(), 'subtotal_tax' => 0, 'total_tax' => 0] as $key => $expected) {
+                $getter = 'get_' . $key; $actual = $integer($item->$getter()); $values[$key] = ['actual' => $actual, 'expected' => $expected, 'matches' => $actual === $expected];
+            }
+            foreach (['_zbm_package_price_toman' => $request->packagePriceToman(), '_zbm_nominal_package_weight_tenths' => $request->nominalPackageWeightTenths(), '_zbm_reference_weight_tenths' => $request->referenceWeightTenths()] as $key => $expected) {
+                $actual = $integer($item->get_meta($key, true));
+                $values[$key] = ['actual' => $actual, 'expected' => $expected, 'matches' => $actual === $expected];
+            }
+            $items[] = ['persisted_item_id' => $item->get_id(), 'matches' => ManagedOrderSnapshot::itemMatches($item, $request), 'fields' => $values];
+        }
+        $counts = [];
+        foreach (['line_item', 'fee', 'shipping', 'coupon', 'tax'] as $type) { $counts[$type] = count($order->get_items($type)); }
+        return ['order_id' => $order->get_id(), 'snapshot_matches' => ManagedOrderSnapshot::matches($order, $request),
+            'pricing_metadata_matches' => ManagedOrderSnapshot::pricingMetadataMatches($order, $request), 'fields' => $pairs,
+            'private_field_present' => $privatePresence, 'item_counts' => $counts, 'items' => $items];
+    }
+    private function exceptionMessages(Throwable $error): array {
+        $chain = [];
+        do {
+            // No stack traces or exception objects: messages alone, with contact/credential forms removed.
+            $message = preg_replace(['/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', '/\b(?:\d{1,3}\.){3}\d{1,3}\b/', '/(?:\+?\d[\d\s().-]{6,}\d)/', '/https?:\/\/\S+/i', '/\b[A-Za-z0-9_\-]{24,}\b/'], '[redacted]', $error->getMessage());
+            $chain[] = ['class' => get_class($error), 'message' => $message]; $error = $error->getPrevious();
+        } while ($error !== null && count($chain) < 8);
+        return $chain;
+    }
+
+    public function test_diagnostic_registered_creator_exposes_historical_recovery_exception_without_http_claim(): void {
+        [$request, $repos, $product] = $this->fixture(); $creator = $this->registeredCreator(); $saved = [];
+        $observer = function ($order) use ($request, &$saved): void {
+            if ($order instanceof WC_Order && (int) $order->get_meta('_zbm_request_id', true) === $request->id()) {
+                $fresh = wc_get_order($order->get_id());
+                $saved[] = ['staged' => $this->snapshotDiagnostic($order, $request), 'persisted' => $fresh instanceof WC_Order ? $this->snapshotDiagnostic($fresh, $request) : null];
+            }
+        };
+        add_action('woocommerce_after_order_object_save', $observer, PHP_INT_MAX, 1);
+        $exception = []; $orderId = null;
+        try { $orderId = $creator->createTestForAcceptedRequest($request); }
+        catch (Throwable $error) { $exception = $this->exceptionMessages($error); }
+        finally { remove_action('woocommerce_after_order_object_save', $observer, PHP_INT_MAX); }
+        $this->diagnose('registered_test_creator', ['creator_class' => get_class($creator), 'execution_mode' => $request->executionMode(),
+            'pricing_version' => $request->pricingVersion(), 'line_count' => count($request->lines()), 'exception_chain' => $exception,
+            'returned_order_id' => $orderId, 'save_observations' => $saved, 'product_stock_after' => wc_get_product($product->get_id())->get_stock_quantity()]);
+    }
+
     public function test_actual_legacy_recovery_form_creates_only_quarantined_test_order_and_stock_reservation(): void {
         global $wpdb; $schema = new Schema($wpdb);
         foreach (['authorized_positive', 'wrong_role', 'other_buyer', 'other_vendor', 'guest', 'no_nonce', 'invalid_nonce', 'missing_reason', 'stale_version'] as $scenario) {
@@ -216,7 +317,10 @@ final class LegacyRequestFormControlsTest extends TestCase {
         (new YithDepositAdapter())->decorate($order, $item, $request->pricingSnapshot(), 1); $order->add_item($item); $order->set_total('100');
         $authority = 'TASK4-' . str_replace('-', '', wp_generate_uuid4()); $order->update_meta_data('_zarinpal_authority', $authority); $order->save();
         self::assertSame(1, $wpdb->update($schema->purchase_requests_table(), ['wc_order_id' => $order->get_id(), 'payment_ready' => 1], ['id' => $request->id()]));
-        $request = $repos['requests']->find($request->id()); self::assertNotNull($request); self::assertTrue(ManagedOrderSnapshot::matches($order, $request));
+        $request = $repos['requests']->find($request->id()); self::assertNotNull($request);
+        $persisted = wc_get_order($order->get_id());
+        $this->diagnose('historical_online_fixture', ['staged' => $this->snapshotDiagnostic($order, $request), 'persisted' => $persisted instanceof WC_Order ? $this->snapshotDiagnostic($persisted, $request) : null]);
+        self::assertTrue(ManagedOrderSnapshot::matches($order, $request));
         $payments = new PaymentRepository($wpdb); self::assertTrue($payments->prepareExpectedDeposit($request, $order->get_id()));
         $payment = $payments->findExpectedByOrder($order->get_id()); self::assertIsArray($payment);
         self::assertSame(1, $wpdb->update($schema->payments_table(), ['status' => 'callback_received_late', 'authority' => $authority, 'callback_at_gmt' => current_time('mysql', true)], ['id' => $payment['id']]));

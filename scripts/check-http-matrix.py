@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 NEGATIVES = ('guest', 'wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce')
@@ -350,6 +351,20 @@ def form_control_base(control, binding, row_id, junit):
     return supplemental_base(control, binding, row_id, junit) and snapshot_valid(control.get('before_snapshot')) and snapshot_valid(control.get('after_snapshot'))
 
 
+def pause_idempotency_proof(control):
+    proof = control.get('idempotency_assertions', {})
+    if not isinstance(proof, dict): return False
+    uuid = r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
+    return (proof.get('appended_rows') == 1 and proof.get('existing_rows_unchanged') is True
+            and proof.get('namespace') == 'purchase_request_transition' and proof.get('status') == 'completed'
+            and isinstance(control.get('request_id'), int) and control['request_id'] > 0
+            and proof.get('result_resource_id') == control['request_id']
+            and proof.get('result_event_uuid') == proof.get('audit_event_uuid')
+            and isinstance(proof.get('audit_event_uuid'), str) and bool(re.fullmatch(uuid, proof['audit_event_uuid']))
+            and isinstance(proof.get('audit_correlation_id'), str) and bool(re.fullmatch(uuid, proof['audit_correlation_id']))
+            and proof.get('audit_actor_user_id', 0) > 0 and isinstance(proof.get('audit_reason'), str) and bool(proof['audit_reason'].strip()))
+
+
 def form_positive(row_id, control, binding, junit):
     if not form_control_base(control, binding, row_id, junit): return False
     if control.get('actor_valid') is not True or control.get('financial_unchanged') is not True: return False
@@ -372,12 +387,13 @@ def form_positive(row_id, control, binding, junit):
                 and all(before[key] == after[key] for key in before if not key.startswith('option:'))
                 and any(isinstance(notice, dict) and notice.get('code') == 'settings_updated' and notice.get('type') == 'success' for notice in (control.get('notice') or [])))
     if row_id == 'http-013':
-        allowed = ('zbm_purchase_requests', 'zbm_audit_logs', 'zbm_notification_outbox')
+        allowed = ('zbm_purchase_requests', 'zbm_audit_logs', 'zbm_notification_outbox', 'zbm_idempotency_keys')
         return (control.get('actor') == 'admin' and control.get('is_paused') is True
                 and control.get('before_version') == 0 and control.get('after_version') == 1
+                and pause_idempotency_proof(control)
                 and isinstance(control.get('notice'), dict) and control['notice'].get('type') == 'success'
                 and all(before[key] == after[key] for key in before if not key.endswith(allowed))
-                and all(any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in ('zbm_purchase_requests', 'zbm_audit_logs')))
+                and all(any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in ('zbm_purchase_requests', 'zbm_audit_logs', 'zbm_idempotency_keys')))
     if row_id == 'http-031':
         allowed = ('zbm_workflows', 'zbm_audit_logs', 'zbm_idempotency_keys')
         return (control.get('actor') == 'buyer_1' and control.get('result') == 'success'
@@ -388,10 +404,61 @@ def form_positive(row_id, control, binding, junit):
     return False
 
 
+def settings_upstream_role_denial(scenario, control):
+    proof = control.get('upstream_contract', {})
+    response = control.get('observed_response', {})
+    if not isinstance(proof, dict) or not isinstance(response, dict): return False
+    expected_actor = {'wrong_role': 'buyer_1', 'other_buyer': 'buyer_2', 'other_vendor': 'vendor_2'}.get(scenario)
+    expected_role = 'seller' if scenario == 'other_vendor' else 'customer'
+    home, redirect = proof.get('home_url'), proof.get('redirect_url')
+    if not isinstance(home, str) or not isinstance(redirect, str): return False
+    parsed = urlsplit(home)
+    return (control.get('type') == 'validation' and control.get('http') == 302
+            and control.get('actor') == expected_actor and expected_actor is not None
+            and control.get('nonce_valid') is True and control.get('persisted_assertions') is True
+            and control.get('denial_layer') == 'dokan_admin_init'
+            and control.get('message') == response.get('message') == 'dokan_block_admin_access_local_home_redirect'
+            and control.get('before_options') == control.get('after_options')
+            and isinstance(control.get('before_options'), dict)
+            and set(control['before_options']) == {'zbm_core_delivery_reminder_minutes', 'zbm_core_sms_templates'}
+            and proof.get('dependency_version') == '5.0.10' and proof.get('hook') == 'admin_init'
+            and proof.get('callback') == 'WeDevs\\Dokan\\Core::block_admin_access' and proof.get('priority') == 10
+            and all(proof.get(key) is True for key in ('registered', 'source_contract_verified', 'hpos_enabled', 'nonce_verified', 'redirect_is_local_home'))
+            and isinstance(proof.get('source_path'), str) and proof['source_path'].endswith('/dokan-lite/includes/Core.php')
+            and proof.get('configured_admin_access') in ('on', 'off') and proof.get('effective_admin_access') == 'on'
+            and proof.get('actor_roles') == [expected_role] and proof.get('primary_role') == expected_role
+            and proof.get('manage_options') is False and proof.get('request_page') == 'options.php' and proof.get('page_exempt') is False
+            and parsed.scheme in ('http', 'https') and bool(parsed.netloc) and not parsed.query and not parsed.fragment
+            and home == redirect and proof.get('home_path') == proof.get('redirect_path') == response.get('redirect_path') == parsed.path
+            and response.get('redirect_is_local_home') is True)
+
+
+def settings_direct_capability_denial(control):
+    proof = control.get('capability_contract', {})
+    response = control.get('observed_response', {})
+    if not isinstance(proof, dict) or not isinstance(response, dict): return False
+    message = 'Sorry, you are not allowed to manage options for this site.'
+    return (control.get('type') == 'validation' and control.get('http') == 403 and control.get('actor') == 'admin'
+            and control.get('actor_valid') is False and control.get('nonce_valid') is True and control.get('persisted_assertions') is True
+            and control.get('denial_layer') == 'wordpress_options_capability'
+            and control.get('message') == response.get('message') == message
+            and control.get('before_options') == control.get('after_options')
+            and isinstance(control.get('before_options'), dict)
+            and set(control['before_options']) == {'zbm_core_delivery_reminder_minutes', 'zbm_core_sms_templates'}
+            and proof.get('actor_roles') == ['administrator'] and proof.get('manage_options') is False
+            and proof.get('manage_woocommerce') is True and proof.get('option_page_capability') == 'manage_options'
+            and proof.get('nonce_verified') is True and proof.get('per_user_cap_override') is True
+            and proof.get('capability_restored') is True)
+
+
 def form_negative(row_id, scenario, control, binding, junit):
     if not form_control_base(control, binding, row_id, junit): return False
     if control.get('generic_dispatcher_only') is True: return False
     if control.get('before_snapshot') != control.get('after_snapshot') or control.get('financial_unchanged') is not True: return False
+    if row_id == 'http-016' and scenario in ('wrong_role', 'other_buyer', 'other_vendor'):
+        return settings_upstream_role_denial(scenario, control)
+    if row_id == 'http-016' and scenario == 'capability_denied':
+        return settings_direct_capability_denial(control)
     if row_id in ('http-012', 'http-016'):
         expected_status = 302 if scenario == 'guest' else (200 if row_id == 'http-012' and scenario in ('no_nonce', 'invalid_nonce') else 403)
     elif row_id == 'http-013':
@@ -424,7 +491,7 @@ def apply_form_overlay(row, gaps, supplemental, junit):
     gaps = [gap for gap in gaps if not gap.startswith('positive-and-negative-controls:')]
     if not positive: gaps.append('positive:form-contract')
     na = {}
-    for scenario in NEGATIVES:
+    for scenario in row.get('required_scenarios', NEGATIVES):
         control = controls.get(scenario, {})
         if not form_negative(row['id'], scenario, control, binding, junit): gaps.append('negative:form:' + scenario)
         elif scenario in ('no_nonce', 'invalid_nonce') and str(control.get('nonce_contract', '')).startswith('N/A:'):

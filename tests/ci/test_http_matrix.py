@@ -227,16 +227,23 @@ class HttpMatrixTest(unittest.TestCase):
         row = next(row for row in catalog['rows'] if row['id'] == row_id)
         binding = row['supplemental'][0]
         before = copy.deepcopy(payment['before_snapshot'])
+        before['wp_zbm_idempotency_keys'] = 'a' * 64
         after = copy.deepcopy(before)
         if row_id == 'http-013':
             after['wp_zbm_purchase_requests'] = 'b' * 64
             after['wp_zbm_audit_logs'] = 'b' * 64
+            after['wp_zbm_idempotency_keys'] = 'b' * 64
         record = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True,
                   'test': binding['test'], 'catalog_ids': [row_id], 'covered_operations': ['pause'], 'controls': {}}
         positive = {key: record[key] for key in ('state', 'assertion_status', 'actual_http', 'test', 'catalog_ids')}
         positive.update(type='mutation', http=302, actor='admin', actor_valid=True, nonce_valid=True,
                         persisted_assertions=True, financial_unchanged=True, before_snapshot=before, after_snapshot=after,
                         before_version=0, after_version=1, is_paused=True, notice={'type': 'success', 'message': 'pause persisted'})
+        positive['request_id'] = 123
+        positive['idempotency_assertions'] = {'appended_rows': 1, 'existing_rows_unchanged': True,
+            'namespace': 'purchase_request_transition', 'status': 'completed', 'result_resource_id': 123,
+            'result_event_uuid': '12345678-1234-1234-1234-123456789abc', 'audit_event_uuid': '12345678-1234-1234-1234-123456789abc',
+            'audit_correlation_id': 'abcdef12-abcd-abcd-abcd-abcdef123456', 'audit_actor_user_id': 1, 'audit_reason': 'actual submitted reason'}
         record['controls']['authorized_positive'] = positive
         cls, method = binding['test'].split('::')
         return row, binding, record, {(cls, method): True}
@@ -264,6 +271,128 @@ class HttpMatrixTest(unittest.TestCase):
         record['controls']['authorized_positive']['after_snapshot'] = copy.deepcopy(record['controls']['authorized_positive']['before_snapshot'])
         record['controls']['authorized_positive']['after_snapshot']['wp_zbm_notification_outbox'] = 'b' * 64
         self.assertFalse(M.form_positive(row['id'], record['controls']['authorized_positive'], binding, junit))
+
+    def test_pause_idempotency_change_requires_exact_completed_append_and_matching_audit(self):
+        row, binding, record, junit = self.form_record()
+        control = record['controls']['authorized_positive']
+        mutations = [('appended_rows', 2), ('existing_rows_unchanged', False), ('namespace', 'other'),
+                     ('status', 'pending'), ('result_resource_id', 999), ('result_event_uuid', 'other'),
+                     ('audit_event_uuid', 'not-a-uuid'), ('audit_correlation_id', 'not-a-uuid'),
+                     ('audit_actor_user_id', 0), ('audit_reason', '')]
+        for key, value in mutations:
+            bad = copy.deepcopy(control); bad['idempotency_assertions'][key] = value
+            with self.subTest(key=key): self.assertFalse(M.form_positive(row['id'], bad, binding, junit))
+        bad = copy.deepcopy(control); del bad['idempotency_assertions']
+        self.assertFalse(M.form_positive(row['id'], bad, binding, junit))
+        bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_idempotency_keys'] = bad['before_snapshot']['wp_zbm_idempotency_keys']
+        self.assertFalse(M.form_positive(row['id'], bad, binding, junit))
+        bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+        self.assertFalse(M.form_positive(row['id'], bad, binding, junit))
+
+    def settings_record(self):
+        row, binding, record, junit = self.form_record('http-016')
+        positive = record['controls']['authorized_positive']
+        before_options = {'zbm_core_delivery_reminder_minutes': 60, 'zbm_core_sms_templates': []}
+        for name in before_options:
+            positive['before_snapshot']['option:' + name] = 'a' * 64
+            positive['after_snapshot']['option:' + name] = 'b' * 64
+        positive.update(verified_settings=True, stored_minutes=120,
+                        stored_templates={'request_rejected': 'Sandbox {request} message'}, before_options=before_options,
+                        after_options={'zbm_core_delivery_reminder_minutes': 120, 'zbm_core_sms_templates': {'request_rejected': 'Sandbox {request} message'}},
+                        notice=[{'code': 'settings_updated', 'type': 'success'}])
+        for scenario, minutes in (('zero_disabled', 0), ('minimum_five', 5), ('maximum_1440', 1440)):
+            control = copy.deepcopy(positive); control['stored_minutes'] = minutes
+            control['after_options']['zbm_core_delivery_reminder_minutes'] = minutes
+            record['controls'][scenario] = control
+        denied = copy.deepcopy(positive)
+        denied.update(type='validation', after_snapshot=copy.deepcopy(denied['before_snapshot']), after_options=copy.deepcopy(before_options),
+                      notice=None, actor_valid=False, nonce_valid=True)
+        for scenario, actor, role in (('wrong_role', 'buyer_1', 'customer'), ('other_buyer', 'buyer_2', 'customer'), ('other_vendor', 'vendor_2', 'seller')):
+            control = copy.deepcopy(denied)
+            control.update(http=302, actor=actor, denial_layer='dokan_admin_init', message='dokan_block_admin_access_local_home_redirect',
+                           observed_response={'message': 'dokan_block_admin_access_local_home_redirect', 'notice': None,
+                               'redirect_path': '', 'redirect_is_local_home': True},
+                           upstream_contract={'dependency_version': '5.0.10', 'hook': 'admin_init',
+                               'callback': 'WeDevs\\Dokan\\Core::block_admin_access', 'registered': True, 'priority': 10,
+                               'source_contract_verified': True, 'source_path': '/wp/plugins/dokan-lite/includes/Core.php',
+                               'hpos_enabled': True, 'configured_admin_access': 'off', 'effective_admin_access': 'on',
+                               'actor_roles': [role], 'primary_role': role, 'manage_options': False,
+                               'request_page': 'options.php', 'page_exempt': False, 'nonce_verified': True,
+                               'redirect_is_local_home': True, 'redirect_url': 'http://localhost', 'home_url': 'http://localhost',
+                               'home_path': '', 'redirect_path': ''})
+            record['controls'][scenario] = control
+        cap = copy.deepcopy(denied)
+        cap.update(http=403, actor='admin', denial_layer='wordpress_options_capability',
+                   message='Sorry, you are not allowed to manage options for this site.',
+                   observed_response={'message': 'Sorry, you are not allowed to manage options for this site.', 'notice': None},
+                   capability_contract={'actor_roles': ['administrator'], 'manage_options': False, 'manage_woocommerce': True,
+                       'option_page_capability': 'manage_options', 'nonce_verified': True, 'per_user_cap_override': True, 'capability_restored': True})
+        record['controls']['capability_denied'] = cap
+        for scenario in ('no_nonce', 'invalid_nonce', 'guest'):
+            control = copy.deepcopy(denied)
+            control.update(actor='guest' if scenario == 'guest' else 'admin', http=302 if scenario == 'guest' else 403,
+                           nonce_valid=False, message='actual login or expired link response',
+                           observed_response={'message': 'actual login or expired link response'})
+            record['controls'][scenario] = control
+        return row, binding, record, junit
+
+    def test_settings_role_redirect_requires_actual_pinned_upstream_contract(self):
+        row, binding, record, junit = self.settings_record()
+        for scenario in ('wrong_role', 'other_buyer', 'other_vendor'):
+            control = record['controls'][scenario]
+            self.assertTrue(M.form_negative(row['id'], scenario, control, binding, junit))
+            for key, value in (('dependency_version', 'other'), ('registered', False), ('source_contract_verified', False),
+                               ('source_path', '/claimed/Core.php'), ('callback', 'claimed'), ('hook', 'other'),
+                               ('hpos_enabled', False), ('effective_admin_access', 'off'), ('request_page', 'admin.php'),
+                               ('page_exempt', True), ('nonce_verified', False), ('redirect_path', '/wrong'),
+                               ('redirect_url', 'http://external.example'), ('home_path', '/wrong')):
+                bad = copy.deepcopy(control); bad['upstream_contract'][key] = value
+                with self.subTest(scenario=scenario, key=key): self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            bad = copy.deepcopy(control); del bad['upstream_contract']
+            self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+            self.assertFalse(M.form_negative(row['id'], scenario, bad, binding, junit))
+            self.assertFalse(M.form_negative(row['id'], scenario, control, binding, {}))
+
+    def test_settings_source_labels_and_bare_302_cannot_qualify_as_role_denials(self):
+        row, binding, record, junit = self.settings_record()
+        control = record['controls']['wrong_role']
+        for key in ('upstream_contract', 'observed_response'):
+            bad = copy.deepcopy(control); del bad[key]
+            self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
+        bad = copy.deepcopy(control); bad['message'] = 'specific claimed role denial'
+        self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
+        bad = copy.deepcopy(control); bad['http'] = 403
+        self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
+        bad = copy.deepcopy(control); bad['actor'] = 'vendor_2'
+        self.assertFalse(M.form_negative(row['id'], 'wrong_role', bad, binding, junit))
+
+    def test_settings_upstream_denials_still_require_positive_ranges_and_direct_wp_capability_denial(self):
+        row, binding, record, junit = self.settings_record()
+        supplemental = {binding['file']: {row['id']: record}}
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertEqual([], gaps)
+        del record['controls']['capability_denied']
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertIn('negative:form:capability_denied', gaps)
+        del record['controls']['minimum_five']
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertIn('positive:form-contract', gaps)
+
+    def test_settings_direct_capability_proof_requires_named_wp403_and_actual_privileges(self):
+        row, binding, record, junit = self.settings_record()
+        control = record['controls']['capability_denied']
+        self.assertTrue(M.form_negative(row['id'], 'capability_denied', control, binding, junit))
+        for key, value in (('http', 302), ('nonce_valid', False), ('actor_valid', True), ('message', 'claimed denial'),
+                           ('denial_layer', 'dokan_admin_init')):
+            bad = copy.deepcopy(control); bad[key] = value
+            with self.subTest(key=key): self.assertFalse(M.form_negative(row['id'], 'capability_denied', bad, binding, junit))
+        for key, value in (('actor_roles', ['customer']), ('manage_options', True), ('manage_woocommerce', False),
+                           ('option_page_capability', 'other'), ('nonce_verified', False), ('per_user_cap_override', False), ('capability_restored', False)):
+            bad = copy.deepcopy(control); bad['capability_contract'][key] = value
+            with self.subTest(capability=key): self.assertFalse(M.form_negative(row['id'], 'capability_denied', bad, binding, junit))
+        bad = copy.deepcopy(control); bad['after_snapshot']['wp_zbm_payments'] = 'b' * 64
+        self.assertFalse(M.form_negative(row['id'], 'capability_denied', bad, binding, junit))
 
     def test_exact_scoped_get_form_read_requires_actual_returned_reference(self):
         row, binding, record, junit = self.form_record('http-012')
