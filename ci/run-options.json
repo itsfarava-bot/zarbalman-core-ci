@@ -1,4 +1,4 @@
 {
-  "scope": "focused",
-  "filter": "EndpointFormControlsTest::test_settings_actual_options_form_commits_sanitized_values_and_preserves_named_denials"
+  "scope": "full",
+  "filter": ""
 }
