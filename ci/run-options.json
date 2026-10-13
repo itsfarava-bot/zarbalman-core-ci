@@ -1,4 +1,4 @@
 {
-  "scope": "full",
-  "filter": ""
+  "scope": "focused",
+  "filter": "FormBranchControlsTest"
 }

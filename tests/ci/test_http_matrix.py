@@ -333,6 +333,50 @@ class HttpMatrixTest(unittest.TestCase):
             with self.subTest(suffix=suffix):
                 self.assertFalse(M.branch_control(changed, binding, row['id'], junit))
 
+    def test_all_frontend_branch_groups_require_every_passing_native_dataset(self):
+        _, _, base, _, junit = self.resume_branch_record()
+        catalog = json.loads((ROOT / 'ci/http-surfaces.json').read_text())
+        row = next(row for row in catalog['rows'] if row['id'] == 'http-031')
+        records = {}
+        bindings = [binding for binding in row['supplemental'] if binding.get('format') == 'branch']
+        for binding in bindings:
+            case = binding['case']; _, branch, actor, before_state, after_state, event = M.BRANCH_CASES[case]
+            proof = copy.deepcopy(base)
+            proof.update(catalog_ids=[row['id']], test=binding['test'], dataset=case, case=case,
+                         branch=branch, actor_type=actor, from_state=before_state, to_state=after_state,
+                         replay_result='success', specific={'workflow_state_verified': True})
+            proof['audit'].update(event_key=event, actor_type=actor)
+            proof['idempotency']['namespace'] = 'workflow'
+            before = proof['before_snapshot']; before['wp_zbm_workflows'] = 'a' * 64
+            before['wp_zbm_order_weights'] = 'a' * 64
+            proof['after_snapshot'] = copy.deepcopy(before)
+            for suffix in ('zbm_workflows', 'zbm_audit_logs', 'zbm_idempotency_keys'):
+                proof['after_snapshot']['wp_' + suffix] = 'b' * 64
+            if case in ('vendor_weight', 'buyer_weight', 'vendor_confirm'):
+                proof['after_snapshot']['wp_zbm_order_weights'] = 'b' * 64
+                proof['specific'] = ({'final_weight_tenths': 8, 'buyer_weight_tenths': 8, 'weights_verified': True}
+                    if case == 'vendor_confirm' else {'stored_weight_tenths': 8, 'weight_role': actor, 'weights_verified': True})
+            if case in ('buyer_dispute', 'vendor_dispute'):
+                for suffix in ('posts', 'postmeta'): proof['after_snapshot']['wp_' + suffix] = 'b' * 64
+                proof['specific'] = {'attachment_count': 1, 'encrypted': True, 'private_flags_verified': True,
+                    'download_bytes_match': True, 'existing_attachment_rows_unchanged': True, 'file_sha256': 'a' * 64}
+            for scenario in ('wrong_role', 'other_buyer', 'other_vendor'):
+                code = 'zbm_transition_forbidden' if scenario == 'wrong_role' else 'forbidden'
+                proof['negative_controls'][scenario] = {'actual_http': True, 'http': 302, 'unchanged': True,
+                    'code': code, 'reason': 'Redirect query zbm_result=' + code}
+            cls, method = binding['test'].split('::'); junit[(cls, method + ' with data set "' + case + '"')] = True
+            self.assertTrue(M.branch_control(proof, binding, row['id'], junit), case)
+            records[case] = proof
+        gaps = ['negative:form:guest'] + ['branch:' + branch for branch in row['branches'] if branch != 'buyer_cancellation_requested']
+        supplemental = {'http-form-branch-controls.json': records}
+        self.assertEqual(['negative:form:guest'], M.apply_branch_overlay(row, gaps, supplemental, junit))
+        for binding in bindings:
+            changed = copy.deepcopy(supplemental); del changed[binding['file']][binding['key']]
+            with self.subTest(case=binding['case']):
+                result = M.apply_branch_overlay(row, gaps, changed, junit)
+                self.assertIn('branch:' + binding['branch'], result)
+                self.assertIn('negative:form:guest', result)
+
     def test_form_guest_renderer_does_not_replace_generic_post_dispatcher_400(self):
         row, binding, record, junit = self.form_record()
         control = copy.deepcopy(record['controls']['authorized_positive'])

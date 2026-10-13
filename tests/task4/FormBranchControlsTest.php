@@ -341,6 +341,7 @@ final class FormBranchControlsTest extends TestCase {
                             'missing_reason' => 'zbm_reason_too_short', 'missing_evidence' => 'zbm_evidence_count',
                             'invalid_weight' => \Zarbalman\Core\Domain\Order\WeightValue::parse_tenths('0')->get_error_code() };
                         $this->result($http, $code); $control['code'] = $code;
+                        $control['reason'] = 'Redirect query zbm_result=' . $code;
                     }
                     self::assertSame($before, $after); self::assertSame($wfRows, $this->rows($schema->workflows_table(), 'order_id'));
                     $negatives[$scenario] = $control; continue;
@@ -357,7 +358,7 @@ final class FormBranchControlsTest extends TestCase {
                 self::assertSame($otherWorkflow, $this->outside($schema->workflows_table(), 'order_id', $id));
                 self::assertSame($otherWeights, $this->outside($schema->weights_table(), 'order_id', $id));
                 $audit = $this->audited($audits, $schema, $id, 'workflow_transitioned', $role, $this->user($owner), $from, $to, $reason, $payload['correlation_id']);
-                $command = $this->command($commands, $schema, $audit, 'workflow'); $specific = [];
+                $command = $this->command($commands, $schema, $audit, 'workflow'); $specific = ['workflow_state_verified' => true];
                 if ($isWeight || $case === 'vendor_confirm') {
                     $weights = $wpdb->get_results($wpdb->prepare('SELECT * FROM %i WHERE order_id=%d ORDER BY order_item_id', $schema->weights_table(), $id), ARRAY_A);
                     self::assertSame('', $wpdb->last_error); self::assertCount(1, $weights); self::assertSame($itemId, (int) $weights[0]['order_item_id']);
