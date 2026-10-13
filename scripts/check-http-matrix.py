@@ -519,7 +519,9 @@ def form_negative(row_id, scenario, control, binding, junit):
 def apply_form_overlay(row, gaps, supplemental, junit):
     binding = row['supplemental'][0]
     record = supplemental.get(binding['file'], {}).get(binding['key'], {})
-    if not supplemental_base(record, binding, row['id'], junit): return gaps, {}, None
+    if not supplemental_base(record, binding, row['id'], junit):
+        gaps += ['branch:' + branch for branch in row.get('branches', []) if 'branch:' + branch not in gaps]
+        return apply_branch_overlay(row, gaps, supplemental, junit), {}, None
     controls = record.get('controls', {})
     positive = form_positive(row['id'], controls.get('authorized_positive', {}), binding, junit)
     if row['id'] == 'http-016':
@@ -541,7 +543,110 @@ def apply_form_overlay(row, gaps, supplemental, junit):
     covered = [verified_operation] if positive and verified_operation in record.get('covered_operations', []) else []
     for branch in expected_branches:
         if branch not in covered: gaps.append('branch:' + branch)
-    return gaps, na, 'actual-form-scoped-read' if row['id'] == 'http-012' else 'actual-form-durable-mutation'
+    return apply_branch_overlay(row, gaps, supplemental, junit), na, 'actual-form-scoped-read' if row['id'] == 'http-012' else 'actual-form-durable-mutation'
+
+
+BRANCH_CASES = {
+    'resume_supplier': ('http-013', 'resume', 'admin', 'supplier_review', 'supplier_review', 'request_resumed'),
+    'reopen_supplier': ('http-013', 'reopen_supplier', 'admin', 'supplier_response_expired', 'supplier_review', 'supplier_deadline_reopened'),
+    'cancel_preorder': ('http-013', 'cancel_review', 'admin', 'admin_review', 'cancelled', 'admin_review_cancelled'),
+    'vendor_prepare': ('http-031', 'vendor_simple_transition', 'vendor', 'supplier_review', 'preparing', 'workflow_transitioned'),
+    'vendor_deliver': ('http-031', 'vendor_simple_transition', 'vendor', 'in_transit', 'delivered', 'workflow_transitioned'),
+    'vendor_confirm': ('http-031', 'vendor_simple_transition', 'vendor', 'buyer_weight_recorded', 'seller_weight_confirmed', 'workflow_transitioned'),
+    'vendor_cancel_review': ('http-031', 'vendor_simple_transition', 'vendor', 'supplier_review', 'cancellation_requested', 'workflow_transitioned'),
+    'vendor_cancel_preparing': ('http-031', 'vendor_simple_transition', 'vendor', 'preparing', 'cancellation_requested', 'workflow_transitioned'),
+    'vendor_weight': ('http-031', 'weight_upload_forms', 'vendor', 'preparing', 'in_transit', 'workflow_transitioned'),
+    'buyer_weight': ('http-031', 'weight_upload_forms', 'buyer', 'delivered', 'buyer_weight_recorded', 'workflow_transitioned'),
+    'buyer_dispute': ('http-031', 'evidenced_dispute_forms', 'buyer', 'delivered', 'dispute_open', 'workflow_transitioned'),
+    'vendor_dispute': ('http-031', 'evidenced_dispute_forms', 'vendor', 'buyer_weight_recorded', 'weight_disputed', 'workflow_transitioned'),
+}
+
+
+def branch_control(proof, binding, row_id, junit):
+    case = binding.get('case')
+    if case not in BRANCH_CASES or not isinstance(proof, dict): return False
+    owner, branch, actor, before_state, after_state, event = BRANCH_CASES[case]
+    if owner != row_id or binding.get('branch') != branch: return False
+    if not (proof.get('state') == proof.get('assertion_status') == 'passed'
+            and proof.get('actual_http') is True and proof.get('catalog_ids') == [row_id]
+            and proof.get('test') == binding.get('test') and proof.get('dataset') == binding.get('dataset') == case
+            and proof.get('case') == case and proof.get('branch') == branch
+            and junit_pass(junit, binding.get('test'), case)
+            and not any(proof.get(key) for key in ('synthetic_dependency', 'mock_dependency', 'mock_provider', 'dependency_overridden'))): return False
+    before, after = proof.get('before_snapshot'), proof.get('after_snapshot')
+    if not snapshot_valid(before) or not snapshot_valid(after) or set(before) != set(after): return False
+    order_tables = ('posts', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta')
+    if not all(any(key.endswith(suffix) for key in before) for suffix in order_tables): return False
+    if not (proof.get('http') == 302 and proof.get('actor_type') == actor
+            and isinstance(proof.get('actor_id'), int) and proof['actor_id'] > 0
+            and isinstance(proof.get('resource_id'), int) and proof['resource_id'] > 0
+            and proof.get('from_state') == before_state and proof.get('to_state') == after_state
+            and proof.get('before_version') == 0 and proof.get('after_version') == 1
+            and all(proof.get(key) is True for key in ('nonce_valid', 'row_changes_verified', 'unrelated_rows_unchanged',
+                'financial_and_orders_unchanged', 'replay_preserved'))
+            and proof.get('replay_http') == 302 and proof.get('replay_result') == ('error' if actor == 'admin' else 'success')): return False
+    allowed = ['zbm_audit_logs', 'zbm_idempotency_keys']
+    required = ['zbm_audit_logs', 'zbm_idempotency_keys']
+    if actor == 'admin':
+        allowed += ['zbm_purchase_requests', 'zbm_notification_outbox']; required += ['zbm_purchase_requests']
+    else:
+        allowed += ['zbm_workflows']; required += ['zbm_workflows']
+        if case in ('vendor_weight', 'buyer_weight', 'vendor_confirm'):
+            allowed += ['zbm_order_weights']; required += ['zbm_order_weights']
+        if case in ('buyer_dispute', 'vendor_dispute'):
+            allowed += ['posts', 'postmeta']; required += ['posts', 'postmeta']
+    if any(before[key] != after[key] for key in before if not key.endswith(tuple(allowed))): return False
+    if any(not any(key.endswith(suffix) and before[key] != after[key] for key in before) for suffix in required): return False
+    audit, command, specific = proof.get('audit', {}), proof.get('idempotency', {}), proof.get('specific', {})
+    if not all(isinstance(value, dict) for value in (audit, command, specific)): return False
+    uuid = r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
+    if not (audit.get('event_key') == event and audit.get('count') == 1
+            and audit.get('actor_type') == actor and audit.get('actor_id') == proof['actor_id']
+            and audit.get('resource_id') == proof['resource_id'] and audit.get('reason_matches') is True
+            and all(isinstance(audit.get(key), str) and re.fullmatch(uuid, audit[key]) for key in ('event_uuid', 'correlation_id'))
+            and command.get('appended_rows') == 1 and command.get('existing_rows_unchanged') is True
+            and command.get('namespace') == ('purchase_request_transition' if actor == 'admin' else 'workflow')
+            and command.get('status') == 'completed' and command.get('result_event_uuid') == audit['event_uuid']): return False
+    controls = proof.get('negative_controls', {})
+    if not isinstance(controls, dict): return False
+    for scenario in ('wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce'):
+        control = controls.get(scenario, {})
+        if not isinstance(control, dict) or control.get('actual_http') is not True or control.get('unchanged') is not True: return False
+        nonce = scenario in ('no_nonce', 'invalid_nonce')
+        status = 403 if nonce else (500 if actor == 'admin' else 302)
+        if control.get('http') != status or not negative_ok(control): return False
+        if actor == 'admin' and not nonce and control.get('message') != 'دسترسی غیرمجاز است.': return False
+        if actor != 'admin' and not nonce and control.get('code') != ('zbm_transition_forbidden' if scenario == 'wrong_role' else 'forbidden'): return False
+    if case == 'resume_supplier':
+        return (specific.get('paused_before') is True and specific.get('paused_after') is False
+                and specific.get('remaining_before') == 1200 and specific.get('remaining_after') is None
+                and specific.get('deadline_in_range') is True)
+    if case == 'reopen_supplier': return specific.get('deadline_seconds') == 3600 and specific.get('deadline_in_range') is True
+    if case == 'cancel_preorder':
+        return (specific.get('wc_order_id_before') is None and specific.get('payment_ready_before') is False
+                and specific.get('payment_count') == specific.get('ledger_count') == 0)
+    if case in ('vendor_weight', 'buyer_weight'):
+        return specific.get('stored_weight_tenths') == 8 and specific.get('weight_role') == actor and specific.get('weights_verified') is True
+    if case == 'vendor_confirm':
+        return specific.get('final_weight_tenths') == specific.get('buyer_weight_tenths') == 8 and specific.get('weights_verified') is True
+    if case in ('buyer_dispute', 'vendor_dispute'):
+        return (specific.get('attachment_count') == 1 and all(specific.get(key) is True for key in
+            ('encrypted', 'private_flags_verified', 'download_bytes_match', 'existing_attachment_rows_unchanged'))
+            and isinstance(specific.get('file_sha256'), str) and bool(re.fullmatch(r'[0-9a-f]{64}', specific['file_sha256'])))
+    return True
+
+
+def apply_branch_overlay(row, gaps, supplemental, junit):
+    bindings = [binding for binding in row.get('supplemental', []) if binding.get('format') == 'branch']
+    for branch in row.get('branches', []):
+        required = {case for case, spec in BRANCH_CASES.items() if spec[:2] == (row['id'], branch)}
+        if not required: continue
+        accepted = set()
+        for binding in bindings:
+            proof = supplemental.get(binding['file'], {}).get(binding['key'], {})
+            if branch_control(proof, binding, row['id'], junit): accepted.add(binding['case'])
+        if required <= accepted: gaps = [gap for gap in gaps if gap != 'branch:' + branch]
+    return gaps
 
 
 def legacy_snapshot_valid(control):

@@ -258,6 +258,81 @@ class HttpMatrixTest(unittest.TestCase):
         self.assertNotIn('branch:pause', gaps)
         self.assertEqual('actual-form-durable-mutation', kind)
 
+    def resume_branch_record(self):
+        row, _, base, junit = self.form_record()
+        binding = {'format': 'branch', 'file': 'http-form-branch-controls.json', 'key': 'resume_supplier',
+                   'case': 'resume_supplier', 'branch': 'resume',
+                   'test': 'FormBranchControlsTest::test_rendered_admin_branch', 'dataset': 'resume_supplier'}
+        row['supplemental'] = row['supplemental'][:1] + [binding]
+        positive = base['controls']['authorized_positive']
+        for suffix in ('posts', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta'):
+            for key in ('before_snapshot', 'after_snapshot'):
+                positive[key]['wp_' + suffix] = 'a' * 64
+        proof = {'state': 'passed', 'assertion_status': 'passed', 'actual_http': True,
+                 'catalog_ids': ['http-013'], 'test': binding['test'], 'dataset': binding['dataset'],
+                 'case': binding['case'], 'branch': 'resume', 'http': 302, 'actor_type': 'admin', 'actor_id': 1,
+                 'nonce_valid': True, 'resource_id': 123, 'from_state': 'supplier_review', 'to_state': 'supplier_review',
+                 'before_version': 0, 'after_version': 1, 'row_changes_verified': True,
+                 'unrelated_rows_unchanged': True, 'financial_and_orders_unchanged': True,
+                 'before_snapshot': positive['before_snapshot'], 'after_snapshot': positive['after_snapshot'],
+                 'replay_preserved': True, 'replay_http': 302, 'replay_result': 'error',
+                 'audit': {'event_key': 'request_resumed', 'event_uuid': '12345678-1234-1234-1234-123456789abc',
+                           'correlation_id': 'abcdef12-abcd-abcd-abcd-abcdef123456', 'count': 1,
+                           'actor_type': 'admin', 'actor_id': 1, 'resource_id': 123, 'reason_matches': True},
+                 'idempotency': {'appended_rows': 1, 'existing_rows_unchanged': True, 'namespace': 'purchase_request_transition',
+                                 'status': 'completed', 'result_event_uuid': '12345678-1234-1234-1234-123456789abc'},
+                 'specific': {'paused_before': True, 'paused_after': False, 'remaining_before': 1200,
+                              'remaining_after': None, 'deadline_in_range': True}, 'negative_controls': {}}
+        for scenario in ('wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce'):
+            proof['negative_controls'][scenario] = {'actual_http': True, 'unchanged': True,
+                'http': 403 if 'nonce' in scenario else 500,
+                'message': 'The link you followed has expired.' if 'nonce' in scenario else 'دسترسی غیرمجاز است.'}
+        cls, method = binding['test'].split('::')
+        junit[(cls, method + ' with data set "resume_supplier"')] = True
+        supplemental = {'http-form-controls.json': {'http-013': base}, binding['file']: {binding['key']: proof}}
+        return row, binding, proof, supplemental, junit
+
+    def test_exact_observed_branch_clears_only_its_own_branch_gap(self):
+        row, _, _, supplemental, junit = self.resume_branch_record()
+        gaps, _, _ = M.apply_form_overlay(row, [], supplemental, junit)
+        self.assertNotIn('branch:resume', gaps)
+        self.assertIn('branch:reopen_deposit', gaps)
+        self.assertIn('negative:form:guest', gaps)
+
+    def test_branch_claims_without_actual_passing_dataset_do_not_clear_gaps(self):
+        row, binding, proof, supplemental, junit = self.resume_branch_record()
+        for mutation in ({'actual_http': False}, {'dataset': 'another'}, {'test': 'Other::test_real'}, {'nonce_valid': False},
+                         {'row_changes_verified': False}, {'unrelated_rows_unchanged': False}, {'replay_preserved': False}):
+            changed = copy.deepcopy(supplemental); changed[binding['file']][binding['key']].update(mutation)
+            with self.subTest(mutation=mutation):
+                self.assertIn('branch:resume', M.apply_form_overlay(row, [], changed, junit)[0])
+        self.assertIn('branch:resume', M.apply_form_overlay(row, [], supplemental, {})[0])
+
+    def test_branch_with_ledger_drift_or_missing_command_is_rejected(self):
+        row, binding, proof, supplemental, junit = self.resume_branch_record()
+        for change in ('ledger', 'command', 'audit'):
+            changed = copy.deepcopy(supplemental); control = changed[binding['file']][binding['key']]
+            if change == 'ledger': control['after_snapshot']['wp_zbm_ledger_entries'] = 'b' * 64
+            elif change == 'command': control['idempotency']['appended_rows'] = 0
+            else: control['audit']['actor_id'] = 999
+            with self.subTest(change=change):
+                self.assertIn('branch:resume', M.apply_form_overlay(row, [], changed, junit)[0])
+
+    def test_branch_accepts_wordpress_prefix_without_trailing_underscore(self):
+        row, binding, proof, _, junit = self.resume_branch_record()
+        for key in ('before_snapshot', 'after_snapshot'):
+            proof[key] = {name.replace('wp_', 'sandbox', 1): value for name, value in proof[key].items()}
+        self.assertTrue(M.branch_control(proof, binding, row['id'], junit))
+
+    def test_branch_without_order_table_evidence_is_rejected(self):
+        row, binding, proof, _, junit = self.resume_branch_record()
+        for suffix in ('posts', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta'):
+            changed = copy.deepcopy(proof)
+            for key in ('before_snapshot', 'after_snapshot'):
+                changed[key] = {name: value for name, value in changed[key].items() if not name.endswith(suffix)}
+            with self.subTest(suffix=suffix):
+                self.assertFalse(M.branch_control(changed, binding, row['id'], junit))
+
     def test_form_guest_renderer_does_not_replace_generic_post_dispatcher_400(self):
         row, binding, record, junit = self.form_record()
         control = copy.deepcopy(record['controls']['authorized_positive'])

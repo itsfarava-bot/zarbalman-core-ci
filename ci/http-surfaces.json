@@ -480,6 +480,33 @@
           "file": "http-form-controls.json",
           "key": "http-013",
           "test": "EndpointFormControlsTest::test_rendered_request_pause_form_changes_only_control_state_and_has_exact_negatives"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "resume_supplier",
+          "case": "resume_supplier",
+          "branch": "resume",
+          "dataset": "resume_supplier",
+          "test": "FormBranchControlsTest::test_rendered_admin_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "reopen_supplier",
+          "case": "reopen_supplier",
+          "branch": "reopen_supplier",
+          "dataset": "reopen_supplier",
+          "test": "FormBranchControlsTest::test_rendered_admin_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "cancel_preorder",
+          "case": "cancel_preorder",
+          "branch": "cancel_review",
+          "dataset": "cancel_preorder",
+          "test": "FormBranchControlsTest::test_rendered_admin_branch"
         }
       ],
       "branches": [
@@ -1045,6 +1072,87 @@
           "file": "http-form-controls.json",
           "key": "http-031",
           "test": "EndpointFormControlsTest::test_frontend_registered_shortcode_transition_form_commits_owned_cancellation_only"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_prepare",
+          "case": "vendor_prepare",
+          "branch": "vendor_simple_transition",
+          "dataset": "vendor_prepare",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_deliver",
+          "case": "vendor_deliver",
+          "branch": "vendor_simple_transition",
+          "dataset": "vendor_deliver",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_confirm",
+          "case": "vendor_confirm",
+          "branch": "vendor_simple_transition",
+          "dataset": "vendor_confirm",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_cancel_review",
+          "case": "vendor_cancel_review",
+          "branch": "vendor_simple_transition",
+          "dataset": "vendor_cancel_review",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_cancel_preparing",
+          "case": "vendor_cancel_preparing",
+          "branch": "vendor_simple_transition",
+          "dataset": "vendor_cancel_preparing",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_weight",
+          "case": "vendor_weight",
+          "branch": "weight_upload_forms",
+          "dataset": "vendor_weight",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "buyer_weight",
+          "case": "buyer_weight",
+          "branch": "weight_upload_forms",
+          "dataset": "buyer_weight",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "buyer_dispute",
+          "case": "buyer_dispute",
+          "branch": "evidenced_dispute_forms",
+          "dataset": "buyer_dispute",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
+        },
+        {
+          "format": "branch",
+          "file": "http-form-branch-controls.json",
+          "key": "vendor_dispute",
+          "case": "vendor_dispute",
+          "branch": "evidenced_dispute_forms",
+          "dataset": "vendor_dispute",
+          "test": "FormBranchControlsTest::test_rendered_frontend_branch"
         }
       ],
       "branches": [

@@ -24,6 +24,7 @@
       <file>tests/task4/RemainingEndpointsTest.php</file>
       <file>tests/task4/PaymentEndpointControlsTest.php</file>
       <file>tests/task4/EndpointFormControlsTest.php</file>
+      <file>tests/task4/FormBranchControlsTest.php</file>
       <file>tests/task4/LegacyRequestFormControlsTest.php</file>
       <file>tests/task4/RegisteredHttpSurfacesTest.php</file>
     </testsuite>
