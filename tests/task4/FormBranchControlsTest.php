@@ -220,14 +220,33 @@ final class FormBranchControlsTest extends TestCase {
                 }
                 $audit = $this->audited($audits, $schema, $id, $event, 'admin', $this->user('admin'), $from, $to, $payload['reason'], null);
                 $command = $this->command($commands, $schema, $audit, 'purchase_request_transition');
-                $notifications = $this->appended($outbox, $this->rows($schema->notification_outbox_table()), 2);
-                $roles = [];
+                $notifications = $this->appended($outbox, $this->rows($schema->notification_outbox_table()), $operation === 'reopen_supplier' ? 3 : 2);
+                $templates = [];
                 foreach ($notifications as $notification) {
-                    self::assertSame($id, (int) $notification['request_id']); self::assertSame($audit['event_uuid'], $notification['event_uuid']);
-                    self::assertSame('pending', $notification['status']); $roles[] = $notification['recipient_role'];
+                    self::assertSame($id, (int) $notification['request_id']);
+                    self::assertSame('pending', $notification['status']); $templates[] = $notification['template_key'];
                     self::assertSame($this->user($notification['recipient_role'] === 'buyer' ? 'buyer_1' : 'vendor_1'), (int) $notification['recipient_user_id']);
+                    $variables = json_decode($notification['payload_json'], true, 32, JSON_THROW_ON_ERROR);
+                    if ($notification['template_key'] === 'supplier_response_reminder_vendor') {
+                        self::assertSame('reopen_supplier', $operation); self::assertSame('vendor', $notification['recipient_role']);
+                        self::assertTrue(wp_is_uuid($notification['event_uuid'])); self::assertNotSame($audit['event_uuid'], $notification['event_uuid']);
+                        self::assertSame(['deadline' => $new['supplier_deadline_gmt']], $variables);
+                        self::assertSame(hash('sha256', 'supplier_response_reminder_vendor|' . $id . '|' . $new['supplier_deadline_gmt']), $notification['dedupe_hash']);
+                        self::assertSame(gmdate('Y-m-d H:i:s', strtotime($new['supplier_deadline_gmt'] . ' UTC') - 600), $notification['next_attempt_gmt']);
+                    } else {
+                        self::assertSame($audit['event_uuid'], $notification['event_uuid']);
+                        if ($operation === 'reopen_supplier') { self::assertSame(['deadline' => $new['supplier_deadline_gmt']], $variables); }
+                    }
                 }
-                sort($roles); self::assertSame(['buyer', 'vendor'], $roles);
+                $expectedTemplates = match ($operation) {
+                    'resume' => ['request_resumed', 'request_resumed_vendor'],
+                    'reopen_supplier' => ['supplier_deadline_reopened', 'supplier_deadline_reopened_vendor', 'supplier_response_reminder_vendor'],
+                    default => ['admin_review_cancelled_buyer', 'admin_review_cancelled_vendor'],
+                };
+                foreach ($notifications as $notification) {
+                    self::assertSame(str_ends_with($notification['template_key'], '_vendor') ? 'vendor' : 'buyer', $notification['recipient_role']);
+                }
+                sort($templates); sort($expectedTemplates); self::assertSame($expectedTemplates, $templates);
                 $this->stable($before, $after, [$schema->purchase_requests_table(), $schema->audit_table(), $schema->idempotency_table(), $schema->notification_outbox_table()]);
                 $replayBefore = Task4ManagedFixture::snapshot(); $replay = CandidateHttp::post('wp-admin/admin-post.php', $payload, $cookie);
                 $replayMessage = match ($operation) { 'resume' => 'وضعیت کنترل مدیریت تغییر کرده است؛ صفحه را تازه کنید.',

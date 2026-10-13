@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "FormBranchControlsTest"
+  "filter": "FormBranchControlsTest.*reopen_supplier"
 }
