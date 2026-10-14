@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "DependencyDoubleBackedTest::test_double_backed_.*without_physical_stock_tracking"
+  "filter": "FinancialDoubleBackedTest|HttpRiskControlsTest|DependencyDoubleBackedTest::test_double_backed_present_yith_native_legacy_recovery_positive_without_physical_stock_tracking|DependencyDoubleBackedTest::test_double_backed_missing_yith_native_legacy_recovery_without_physical_stock_tracking_must_fail_closed"
 }

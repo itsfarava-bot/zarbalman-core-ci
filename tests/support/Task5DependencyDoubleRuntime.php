@@ -112,7 +112,7 @@ final class Task5DependencyDoubleRuntime {
             // the same bounded immutable-meta lookup as native Core recovery.
             $orders = wc_get_orders(['type' => 'shop_order', 'limit' => 2, 'orderby' => 'ID', 'order' => 'ASC', 'return' => 'objects',
                 'meta_query' => [['key' => '_zbm_request_id', 'value' => (string) $request->id(), 'compare' => '=']]]);
-            $row['candidate_count'] = count($orders);
+            $row['immutable_meta_candidate_count'] = count($orders);
             $row['candidate_lookup'] = 'immutable_request_meta';
             // A native save can reject the staged snapshot before its request
             // meta exists. Retain only request-local native creation IDs as a
@@ -124,10 +124,17 @@ final class Task5DependencyDoubleRuntime {
                 }
                 $row['candidate_lookup'] = 'request_local_native_creation_same_customer';
             }
+            $row['candidate_count'] = count($orders);
             $row['candidates'] = [];
             foreach ($orders as $order) {
-                if ($order instanceof WC_Order) { $row['candidates'][] = self::snapshotDiagnostic($order, $request); }
+                if ($order instanceof WC_Order) {
+                    try { $row['candidates'][] = self::snapshotDiagnostic($order, $request); }
+                    catch (Throwable $error) { $row['candidates'][] = ['order_id' => $order->get_id(), 'capture_error_class' => get_class($error)]; }
+                }
             }
+            return $row;
+        } catch (Throwable $error) {
+            $row['capture_error_class'] = get_class($error);
             return $row;
         } finally {
             // A diagnostic read must not change the transaction's error state.
@@ -231,6 +238,10 @@ final class Task5DependencyDoubleRuntime {
 add_action('woocommerce_new_order', static function ($orderId): void {
     $GLOBALS['zbm_task5_observed_native_order_ids'][] = (int) $orderId;
 }, PHP_INT_MAX, 1);
+add_action('zbm_purchase_request_deposit_paid', static function (int $requestId): void {
+    add_option('zbm_task5_double_event_' . wp_generate_uuid4(), ['event' => 'zbm_purchase_request_deposit_paid',
+        'request_id' => $requestId, 'pid' => getmypid(), 'at' => microtime(true), 'dependency_mode' => 'double-backed'], '', false);
+}, PHP_INT_MAX, 1);
 // Woo invokes this filter once per native handler. Duplicate rows are retained
 // as observations, never counted as distinct business failures. The observer
 // always returns the original message and never installs/replaces a logger.
@@ -264,9 +275,10 @@ add_action('init', static function () use ($task5Config): void {
     if ($task5Config['callback_barrier_count'] !== 2) { return; }
     $deadline = microtime(true) + 5;
     do {
-        $count = $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM %i WHERE option_name LIKE %s', $wpdb->options, $wpdb->esc_like($prefix) . '%'));
+        $rows = $wpdb->get_col($wpdb->prepare('SELECT option_value FROM %i WHERE option_name LIKE %s', $wpdb->options, $wpdb->esc_like($prefix) . '%'));
         if ($wpdb->last_error !== '') { wp_die('Callback barrier read failed closed.', '', ['response' => 500]); }
-        if ((int) $count >= 2) { return; }
+        $pids = array_unique(array_map(static fn ($value): int => (int) (maybe_unserialize($value)['pid'] ?? 0), $rows));
+        if (count($pids) >= 2 && !in_array(0, $pids, true)) { return; }
         usleep(10000);
     } while (microtime(true) < $deadline);
     wp_die('Two distinct callback workers did not enter the barrier.', '', ['response' => 503]);

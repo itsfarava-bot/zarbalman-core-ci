@@ -6,6 +6,8 @@ require_once __DIR__ . '/Task4EndpointHttp.php';
 require_once __DIR__ . '/Task5DependencyDoubles.php';
 
 use PHPUnit\Framework\Assert;
+use Automattic\WooCommerce\Caches\OrderCache;
+use Automattic\WooCommerce\Utilities\OrderUtil;
 use Zarbalman\Core\Application\PurchaseRequestService;
 use Zarbalman\Core\Admin\PurchaseRequestAdmin;
 use Zarbalman\Core\Domain\PurchaseRequest\PurchaseRequest;
@@ -131,7 +133,13 @@ final class Task5FinancialFixture {
         Assert::assertTrue(ManagedOrderSnapshot::matches($this->order(), $request));
         Assert::assertSame('', $this->order()->get_billing_email('edit')); Assert::assertSame('', $this->order()->get_billing_phone('edit'));
         $this->authority = 'TASK5HISTORICAL' . str_replace('-', '', wp_generate_uuid4());
-        $this->reference = (string) $this->id . '501';
+        // Disjoint from Task 4's small concatenated IDs; exact on 64-bit PHP.
+        $this->reference = (string) (1000000000000000 + $this->id);
+        global $wpdb;
+        Assert::assertSame('0', (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE provider='zarinpal' AND reference=%s",
+            (new Schema($wpdb))->payments_table(), $this->reference)), 'Synthetic provider reference must be globally unused.');
+        Assert::assertSame('', $wpdb->last_error);
         if ($issued) { $this->historicalIssuedIdentity(); }
         wp_set_current_user(0);
     }
@@ -154,10 +162,78 @@ final class Task5FinancialFixture {
         $request = $this->repos['requests']->find($this->id); Assert::assertInstanceOf(PurchaseRequest::class, $request); return $request;
     }
     public function order(): WC_Order {
-        // Avoid the runner's old post/meta cache after another HTTP process writes.
-        clean_post_cache($this->orderId); wp_cache_delete($this->orderId, 'orders');
+        // Woo 10.9.4 factory objects and HPOS datastore records have distinct,
+        // prefixed cache keys. Use their native invalidators after HTTP writes.
+        clean_post_cache($this->orderId);
+        wc_get_container()->get(OrderCache::class)->remove($this->orderId);
+        $store = WC_Data_Store::load('order');
+        Assert::assertTrue(OrderUtil::custom_orders_table_usage_is_enabled(), 'Actual HPOS datastore required.');
+        $store->clear_cached_data([$this->orderId]);
         $order = wc_get_order($this->orderId); Assert::assertInstanceOf(WC_Order::class, $order);
         $order->read_meta_data(true); return $order;
+    }
+    /** Observe the runner's native factory cache before refreshing it. */
+    public function cacheObservation(): array {
+        $cached = wc_get_order($this->orderId); Assert::assertInstanceOf(WC_Order::class, $cached);
+        $before = ['status' => $cached->get_status(), 'is_paid' => $cached->is_paid(), 'transaction_id' => $cached->get_transaction_id()];
+        $raw = $this->rawHposOrder();
+        $fresh = $this->order();
+        return ['before_native_invalidation' => $before, 'raw_hpos_before_invalidation' => $raw, 'after_native_invalidation' => [
+            'status' => $fresh->get_status(), 'is_paid' => $fresh->is_paid(), 'transaction_id' => $fresh->get_transaction_id()]];
+    }
+    private function rawHposOrder(): array {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare('SELECT id,status,currency,total_amount,transaction_id FROM %i WHERE id=%d',
+            $wpdb->prefix . 'wc_orders', $this->orderId), ARRAY_A);
+        Assert::assertIsArray($row); Assert::assertSame('', $wpdb->last_error);
+        return $row;
+    }
+    /** Independent, authenticated native read in a fresh HTTP worker. */
+    private function authenticatedOrderFacts(): array {
+        $root = getenv('ZBM_TEST_WP_ROOT');
+        Assert::assertIsString($root); Assert::assertFileExists($root . '/wp-load.php');
+        $name = 'task5-finance-read-' . str_replace('-', '', wp_generate_uuid4()) . '.php';
+        $path = rtrim($root, '/') . '/' . $name;
+        $source = <<<'PHP'
+<?php
+declare(strict_types=1);
+require __DIR__ . '/wp-load.php';
+if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true || !current_user_can('manage_options')) {
+    wp_send_json(['code' => 'sandbox_admin_required'], 403);
+}
+$order = wc_get_order(absint($_GET['order_id'] ?? 0));
+if (!$order instanceof WC_Order || 'yes' !== $order->get_meta('_zbm_managed_order', true)) {
+    wp_send_json(['code' => 'managed_order_required'], 400);
+}
+$row = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id=%d AND wc_order_id=%d',
+    (new Zarbalman\Core\Infrastructure\Schema($wpdb))->purchase_requests_table(),
+    (int) $order->get_meta('_zbm_request_id', true), $order->get_id()), ARRAY_A);
+if (!is_array($row) || $wpdb->last_error !== '') { wp_send_json(['code' => 'request_read_failed'], 500); }
+$request = Zarbalman\Core\Domain\PurchaseRequest\PurchaseRequest::fromRow($row);
+wp_send_json(['actual_http' => true, 'authenticated_admin' => true, 'order_id' => $order->get_id(),
+    'status' => $order->get_status(), 'is_paid' => $order->is_paid(), 'total' => (string) $order->get_total(),
+    'transaction_id' => $order->get_transaction_id(),
+    'snapshot_matches' => Zarbalman\Core\Integration\ManagedOrderSnapshot::matches($order, $request)]);
+PHP;
+        $handle = fopen($path, 'x'); Assert::assertIsResource($handle);
+        $actor = get_current_user_id(); $hadCookie = isset($_COOKIE[LOGGED_IN_COOKIE]); $oldCookie = $_COOKIE[LOGGED_IN_COOKIE] ?? null;
+        try {
+            Assert::assertSame(strlen($source), fwrite($handle, $source)); fclose($handle); $handle = null;
+            Assert::assertTrue(chmod($path, 0600));
+            [$cookie] = CandidateHttp::auth($this->users['admin'], 'task5-finance-read');
+            $http = Task4EndpointHttp::get($name, ['order_id' => $this->orderId], $cookie);
+            Assert::assertSame(200, $http['status']);
+            $facts = json_decode($http['body'], true, 32, JSON_THROW_ON_ERROR);
+            Assert::assertTrue($facts['actual_http']); Assert::assertTrue($facts['authenticated_admin']);
+            Assert::assertSame($this->orderId, $facts['order_id']);
+            return $facts;
+        } finally {
+            if (is_resource($handle)) { fclose($handle); }
+            $removed = unlink($path);
+            wp_set_current_user($actor);
+            if ($hadCookie) { $_COOKIE[LOGGED_IN_COOKIE] = $oldCookie; } else { unset($_COOKIE[LOGGED_IN_COOKIE]); }
+            Assert::assertTrue($removed, 'Owned read-only HTTP probe must be removed.');
+        }
     }
     public function configure(Task5DependencyDoubles $doubles, int $providerCode = 100, bool $concurrent = false, ?int $expectedRial = null): void {
         $doubles->configure(['supporting' => true, 'callback_probe_order_id' => $this->orderId,
@@ -177,12 +253,17 @@ final class Task5FinancialFixture {
         global $wpdb;
         Assert::assertSame(1, $wpdb->update((new Schema($wpdb))->purchase_requests_table(), $fields, ['id' => $this->id]), $wpdb->last_error);
     }
-    public function expireNatively(): void {
+    public function expireNatively(string $expectedState = 'deposit_expired'): array {
+        $before = $this->facts();
         $this->persistedFixtureFields(['deposit_deadline_gmt' => gmdate('Y-m-d H:i:s', time() - 30)]);
         $request = $this->request();
         $expired = self::service()->expireDeposit($this->id, $request->version());
+        $after = $this->facts();
+        self::evidence('expiry-observation-' . $this->id, ['before' => $before, 'after' => $after,
+            'clock_fixture_deadline_in_past' => true, 'returned_error' => $expired instanceof WP_Error ? $expired->get_error_code() : null]);
         Assert::assertInstanceOf(PurchaseRequest::class, $expired);
-        Assert::assertSame('deposit_expired', $this->request()->state());
+        Assert::assertSame($expectedState, $this->request()->state());
+        return ['before' => $before, 'after' => $after];
     }
 
     /** Exact persisted request-scoped facts, independent of HTTP response text. */
@@ -201,6 +282,8 @@ final class Task5FinancialFixture {
         sort($orders); $facts['order_ids'] = array_map('intval', $orders);
         $facts['state'] = $this->request()->state(); $facts['order_total'] = (string) $this->order()->get_total();
         $facts['order_status'] = $this->order()->get_status();
+        $facts['raw_hpos_order'] = $this->rawHposOrder();
+        $facts['authenticated_http_order'] = $this->authenticatedOrderFacts();
         $facts['fixture_new_empty_email_customer'] = true; $facts['original_account_emails_unchanged'] = true;
         return $facts;
     }
@@ -218,7 +301,16 @@ final class Task5FinancialFixture {
         Assert::assertSame($this->authority, $payment['authority']); Assert::assertSame($this->reference, $payment['reference']);
         Assert::assertSame($late ? 'late_payment_review' : 'deposit_paid', $facts['state']);
         Assert::assertTrue($this->order()->is_paid()); Assert::assertTrue(ManagedOrderSnapshot::matches($this->order(), $this->request()));
+        Assert::assertSame('wc-' . $facts['order_status'], $facts['raw_hpos_order']['status']);
+        Assert::assertSame($this->reference, $facts['raw_hpos_order']['transaction_id']);
+        Assert::assertTrue($facts['authenticated_http_order']['is_paid']);
+        Assert::assertTrue($facts['authenticated_http_order']['snapshot_matches']);
+        Assert::assertSame($facts['order_status'], $facts['authenticated_http_order']['status']);
+        Assert::assertSame($this->reference, $facts['authenticated_http_order']['transaction_id']);
         Assert::assertMatchesRegularExpression('/\A' . $this->deposit . '(?:\.0+)?\z/', $facts['order_total']);
+        Assert::assertMatchesRegularExpression('/\A' . $this->deposit . '(?:\.0+)?\z/', $facts['raw_hpos_order']['total_amount']);
+        Assert::assertMatchesRegularExpression('/\A' . $this->deposit . '(?:\.0+)?\z/', $facts['authenticated_http_order']['total']);
+        Assert::assertSame('IRT', $facts['raw_hpos_order']['currency']);
         Assert::assertCount($late ? 1 : 3, $facts['ledger']);
         $expected = ['employer_cash_received' => [$this->deposit, 'recorded', 'employer', 0, 'cash']];
         if (!$late) {

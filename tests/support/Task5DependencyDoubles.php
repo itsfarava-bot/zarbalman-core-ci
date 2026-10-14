@@ -145,6 +145,13 @@ final class Task5DependencyDoubles {
         if ($wpdb->last_error !== '') { throw new RuntimeException('Callback probe facts read failed.'); }
         return array_map('maybe_unserialize', $rows);
     }
+    public function events(int $requestId): array {
+        global $wpdb;
+        $rows = $wpdb->get_col($wpdb->prepare('SELECT option_value FROM %i WHERE option_name LIKE %s ORDER BY option_id',
+            $wpdb->options, $wpdb->esc_like('zbm_task5_double_event_') . '%'));
+        if ($wpdb->last_error !== '') { throw new RuntimeException('Native event observations unavailable.'); }
+        return array_values(array_filter(array_map('maybe_unserialize', $rows), static fn (array $row): bool => $row['request_id'] === $requestId));
+    }
     public function restore(): void {
         foreach (array_reverse($this->created) as $path) { if (is_file($path) && !unlink($path)) { throw new RuntimeException('Unable to remove owned temporary double support.'); } }
         $this->created = [];
@@ -156,8 +163,8 @@ final class Task5DependencyDoubles {
         $this->previous = [];
         global $wpdb;
         if ($wpdb instanceof wpdb) {
-            $wpdb->query($wpdb->prepare('DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s', $wpdb->options,
-                $wpdb->esc_like('zbm_task5_double_call_') . '%', $wpdb->esc_like('zbm_task5_double_probe_') . '%'));
+            $wpdb->query($wpdb->prepare('DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s', $wpdb->options,
+                $wpdb->esc_like('zbm_task5_double_call_') . '%', $wpdb->esc_like('zbm_task5_double_probe_') . '%', $wpdb->esc_like('zbm_task5_double_event_') . '%'));
             if ($wpdb->last_error !== '') { throw new RuntimeException('Unable to clean synthetic call rows.'); }
         }
         if (is_resource($this->lock)) { flock($this->lock, LOCK_UN); fclose($this->lock); $this->lock = null; }
