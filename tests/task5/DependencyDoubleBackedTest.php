@@ -95,7 +95,7 @@ final class DependencyDoubleBackedTest extends TestCase {
     }
 
     /** Creates a separate legal phone-only customer; existing account emails are never changed. */
-    private function request(string $mode): array {
+    private function request(string $mode, bool $trackStock = true): array {
         global $wpdb;
         $buyer = wp_insert_user(['user_login' => 'task5_phone_only_' . str_replace('-', '', wp_generate_uuid4()),
             'user_pass' => wp_generate_password(32, true, true), 'user_email' => '', 'role' => 'customer']);
@@ -103,6 +103,11 @@ final class DependencyDoubleBackedTest extends TestCase {
         self::assertSame('', get_userdata($buyer)->user_email);
         update_user_meta($buyer, 'billing_phone', '09120000000');
         $vendor = $this->user('vendor_1'); $product = Task4RemainingFixture::product($vendor, 'Task 5 double-backed dependency product');
+        if (!$trackStock) {
+            $product->set_manage_stock(false); $product->save();
+            $product = wc_get_product($product->get_id()); self::assertInstanceOf(WC_Product::class, $product);
+            self::assertFalse($product->managing_stock()); self::assertFalse($product->is_virtual());
+        }
         $start = (new DateTimeImmutable('today', wp_timezone()))->modify('+5 days')->setTime(12, 0)->setTimezone(new DateTimeZone('UTC'));
         $window = DeliveryWindow::exact($start->format('Y-m-d H:i:s'), $start->modify('+2 hours')->format('Y-m-d H:i:s'), current_time('mysql', true), wp_timezone_string());
         $address = ['store_name' => 'Synthetic vendor', 'street_1' => 'Synthetic street', 'street_2' => '', 'city' => 'Synthetic city', 'zip' => '00000', 'state' => 'TEH', 'country' => 'IR'];
@@ -240,6 +245,71 @@ final class DependencyDoubleBackedTest extends TestCase {
             'expected_fail_closed' => true, 'observed_fail_closed' => $closed,
             'effect' => $closed ? 'Native recovery denied without mutation.' : 'Native recovery observation did not satisfy the dependency contract.'], $closed ? 'passed' : 'failed');
         self::assertSame(302, $http['status']); self::assertSame($emails, $this->emailFingerprint()); self::assertSame([], $this->doubles->calls());
+        self::assertTrue($closed, 'Unavailable dependencies must preserve the pending request, stock and order identity. Observed notice=' . ($notice['type'] ?? '[missing]') . ', state=' . $fresh->state() . ', order=' . ($fresh->wcOrderId() ?? 0));
+    }
+    public function test_double_backed_present_yith_native_legacy_recovery_positive_without_physical_stock_tracking(): void {
+        global $wpdb;
+        $facts = $this->facts(['yith' => true, 'gateway' => true, 'supporting' => true]); $this->onlyFailures($facts, []);
+        [$request, $repos, $product] = $this->request('test_pending', false); $emails = $this->emailFingerprint(); $before = Task4ManagedFixture::snapshot();
+        $http = $this->recoverTest($request); self::assertSame(302, $http['status']);
+        $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin'));
+        $this->record('observed-native-legacy-recovery-without-physical-stock-tracking', ['http' => $http['status'], 'observed_notice' => $notice,
+            'projection_diagnostics' => $this->doubles->projectionDiagnostics(),
+            'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
+        self::assertIsArray($notice); self::assertSame('success', $notice['type']);
+        $fresh = $repos['requests']->find($request->id()); self::assertSame('test', $fresh->executionMode()); self::assertSame('deposit_paid', $fresh->state()); self::assertSame(1, $fresh->version());
+        $order = wc_get_order($fresh->wcOrderId()); self::assertInstanceOf(WC_Order::class, $order); self::assertTrue(ManagedOrderSnapshot::matches($order, $fresh));
+        self::assertSame('test', ManagedOrderSnapshot::route($order)); self::assertSame('pending', $order->get_status()); self::assertFalse($order->is_paid());
+        self::assertSame('no', $order->get_meta('_zbm_payment_enabled', true)); self::assertSame('', $order->get_billing_email('edit')); self::assertSame('', $order->get_billing_phone('edit'));
+        self::assertNull($order->get_date_paid()); self::assertSame('', $order->get_transaction_id());
+        self::assertTrue($fresh->stockReserved()); self::assertFalse($fresh->stockReleased());
+        $stock = $wpdb->get_var($wpdb->prepare('SELECT meta_value FROM %i WHERE post_id=%d AND meta_key=%s', $wpdb->postmeta, $product->get_id(), '_stock'));
+        self::assertSame('', $wpdb->last_error); self::assertSame('100', $stock);
+        $freshProduct = wc_get_product($product->get_id()); self::assertInstanceOf(WC_Product::class, $freshProduct);
+        self::assertFalse($freshProduct->managing_stock()); self::assertFalse($freshProduct->is_virtual()); self::assertSame(100, $freshProduct->get_stock_quantity());
+        foreach ($order->get_items('line_item') as $item) { self::assertSame(0, (int) $item->get_meta('_reduced_stock', true)); }
+        self::assertSame(['payments' => 0, 'ledger' => 0, 'actions' => 0, 'dokan_mirrors' => 0], $this->financialCounts($request->id()));
+        $after = Task4ManagedFixture::snapshot(); $schema = new Schema($wpdb);
+        foreach ([$schema->payments_table(), $schema->ledger_table(), $schema->financial_actions_table(), $schema->dokan_credit_mirrors_table()] as $table) {
+            self::assertSame($before[$table], $after[$table], 'Legacy recovery must preserve all financial rows.');
+        }
+        self::assertSame($emails, $this->emailFingerprint()); self::assertSame([], $this->doubles->calls());
+        [$adminCookie] = CandidateHttp::auth($this->user('admin'), 'task5-native-yith-guards');
+        $guardFacts = $this->doubles->facts($adminCookie, $order->get_id());
+        self::assertFalse($guardFacts['native_yith_guard_probe']['physical_result']); self::assertTrue($guardFacts['native_yith_guard_probe']['skip_balance_result']);
+        $this->record('double-backed-native-legacy-recovery-positive-without-physical-stock-tracking', ['test' => __METHOD__, 'facts' => $facts, 'http' => $http['status'],
+            'request_id' => $request->id(), 'order_id' => $order->get_id(), 'snapshot_matches' => true,
+            'fixture_new_empty_email_customer' => true, 'fixture_physical_stock_tracking' => false, 'observed_physical_stock_quantity' => (int) $stock, 'observed_logical_stock_reserved' => $fresh->stockReserved(), 'account_emails_unchanged' => true, 'financial_counts' => $this->financialCounts($request->id()), 'native_yith_guard_probe' => $guardFacts['native_yith_guard_probe'],
+            'effect' => 'Real native handler creates one unpaid quarantined test order and records logical reservation for a physical product without stock tracking; quantity is unchanged and no provider transport or cash occurs.']);
+    }
+    /** Native missing-dependency contract. */
+    public function test_double_backed_missing_yith_native_legacy_recovery_without_physical_stock_tracking_must_fail_closed(): void {
+        global $wpdb;
+        $facts = $this->facts(['yith' => false, 'gateway' => true, 'supporting' => true]); $this->onlyFailures($facts, ['yith']);
+        self::assertSame('zbm_test_order_dependencies_unavailable', $facts['test_managed_error']['code']);
+        [$request, $repos, $product] = $this->request('test_pending', false); $before = Task4ManagedFixture::snapshot(); $emails = $this->emailFingerprint();
+        $http = $this->recoverTest($request); $fresh = $repos['requests']->find($request->id());
+        $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin')); $after = Task4ManagedFixture::snapshot();
+        $stock = $wpdb->get_var($wpdb->prepare('SELECT meta_value FROM %i WHERE post_id=%d AND meta_key=%s', $wpdb->postmeta, $product->get_id(), '_stock'));
+        self::assertSame('', $wpdb->last_error);
+        $financialCounts = $this->financialCounts($request->id());
+        $closed = '100' === $stock && ['payments' => 0, 'ledger' => 0, 'actions' => 0, 'dokan_mirrors' => 0] === $financialCounts && $before === $after && null === $fresh->wcOrderId() && 'test_pending' === $fresh->executionMode() && 'supplier_accepted' === $fresh->state()
+            && 0 === $fresh->version() && !$fresh->stockReserved() && 'error' === ($notice['type'] ?? null);
+        $this->record('double-backed-missing-yith-native-legacy-recovery-without-physical-stock-tracking-regression', ['test' => __METHOD__, 'facts' => $facts, 'http' => $http['status'],
+            'request_id' => $request->id(), 'observed_notice' => $notice, 'observed_order_id' => $fresh->wcOrderId(),
+            'observed_state' => $fresh->state(), 'observed_mode' => $fresh->executionMode(), 'observed_version' => $fresh->version(),
+            'observed_stock_reserved' => $fresh->stockReserved(), 'fixture_physical_stock_tracking' => false, 'observed_physical_stock_quantity' => (int) $stock, 'projection_diagnostics' => $this->doubles->projectionDiagnostics(), 'snapshot_unchanged' => $before === $after, 'before_snapshot' => $before, 'after_snapshot' => $after,
+            'financial_counts' => $this->financialCounts($request->id()), 'account_emails_unchanged' => $emails === $this->emailFingerprint(),
+            'expected_fail_closed' => true, 'observed_fail_closed' => $closed,
+            'effect' => $closed ? 'Native recovery denied without mutation.' : 'Native recovery observation did not satisfy the dependency contract.'], $closed ? 'passed' : 'failed');
+        self::assertSame(302, $http['status']); self::assertSame($emails, $this->emailFingerprint()); self::assertSame([], $this->doubles->calls());
+        self::assertSame($before, $after, 'Missing YITH must preserve every request, order, stock and financial row.');
+        self::assertNull($fresh->wcOrderId()); self::assertSame('test_pending', $fresh->executionMode()); self::assertSame('supplier_accepted', $fresh->state()); self::assertSame(0, $fresh->version());
+        self::assertFalse($fresh->stockReserved()); self::assertFalse($fresh->stockReleased());
+        self::assertSame(['payments' => 0, 'ledger' => 0, 'actions' => 0, 'dokan_mirrors' => 0], $financialCounts);
+        self::assertSame('100', $stock);
+        $freshProduct = wc_get_product($product->get_id()); self::assertInstanceOf(WC_Product::class, $freshProduct);
+        self::assertFalse($freshProduct->managing_stock()); self::assertFalse($freshProduct->is_virtual()); self::assertSame(100, $freshProduct->get_stock_quantity());
         self::assertTrue($closed, 'Unavailable dependencies must preserve the pending request, stock and order identity. Observed notice=' . ($notice['type'] ?? '[missing]') . ', state=' . $fresh->state() . ', order=' . ($fresh->wcOrderId() ?? 0));
     }
 }

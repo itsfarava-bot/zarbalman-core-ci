@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "FinancialDoubleBackedTest|HttpRiskControlsTest"
+  "filter": "DependencyDoubleBackedTest::test_double_backed_.*without_physical_stock_tracking"
 }
