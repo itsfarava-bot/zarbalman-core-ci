@@ -27,6 +27,8 @@
       <file>tests/task4/FormBranchControlsTest.php</file>
       <file>tests/task4/LegacyRequestFormControlsTest.php</file>
       <file>tests/task4/RegisteredHttpSurfacesTest.php</file>
+      <file>tests/task5/DependencyDoubleBackedTest.php</file>
+      <file>tests/task4/HttpRiskControlsTest.php</file>
     </testsuite>
   </testsuites>
 </phpunit>

@@ -1,0 +1,111 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/Task4EndpointHttp.php';
+
+/** Explicit double-backed dependencies, installed only into a disposable runtime.
+ * No production objects, actors, capabilities, eligibility, or health reports are replaced.
+ */
+final class Task5DependencyDoubles {
+    private string $root;
+    private string $mu;
+    private array $previous = [];
+    private array $created = [];
+    private mixed $lock;
+    private array $config = [];
+    private const MERCHANT = 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL';
+
+    public static function install(array $config = []): self {
+        $fixture = new self();
+        try { $fixture->start($config); return $fixture; }
+        catch (Throwable $error) { $fixture->restore(); throw $error; }
+    }
+    private function __construct() {
+        if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { throw new RuntimeException('Disposable sandbox required.'); }
+        $root = getenv('ZBM_TEST_WP_ROOT');
+        if (!is_string($root) || !is_file($root . '/wp-load.php')) { throw new RuntimeException('Real disposable WP root required.'); }
+        $this->root = rtrim($root, '/'); $this->mu = $this->root . '/wp-content/mu-plugins';
+        $this->lock = fopen($this->mu . '/zbm-task5-dependency-double.lock', 'c');
+        if (!is_resource($this->lock) || !flock($this->lock, LOCK_EX | LOCK_NB)) { throw new RuntimeException('Another dependency-double fixture owns this sandbox.'); }
+    }
+    private function start(array $config): void {
+        foreach (['zz-zbm-task5-dependency-double.php', 'zbm-task5-dependency-double-config.json'] as $name) {
+            if (file_exists($this->mu . '/' . $name)) { throw new RuntimeException('Dependency-double runtime already exists.'); }
+        }
+        $harness = $this->root . '/task5-dependency-double-harness.php';
+        if (file_exists($harness)) { throw new RuntimeException('Dependency-double harness already exists.'); }
+        foreach (['woocommerce_WC_ZPal_settings', 'woocommerce_currency', 'woocommerce_weight_unit', 'woocommerce_manage_stock'] as $name) {
+            $missing = new stdClass(); $value = get_option($name, $missing);
+            $this->previous[$name] = ['exists' => $value !== $missing, 'value' => $value === $missing ? null : $value];
+        }
+        update_option('woocommerce_WC_ZPal_settings', ['enabled' => 'yes', 'merchantcode' => self::MERCHANT, 'fee_payer' => 'merchant', 'sandbox' => 'no'], false);
+        update_option('woocommerce_currency', 'IRT'); update_option('woocommerce_weight_unit', 'kg'); update_option('woocommerce_manage_stock', 'yes');
+        $this->configure($config);
+        foreach ([__DIR__ . '/Task5DependencyDoubleRuntime.php' => $this->mu . '/zz-zbm-task5-dependency-double.php',
+            __DIR__ . '/Task5DependencyDoubleHarness.php' => $harness] as $source => $destination) {
+            if (!copy($source, $destination)) { throw new RuntimeException('Unable to copy sandbox dependency-double support.'); }
+            $this->created[] = $destination;
+        }
+    }
+    public function configure(array $config): void {
+        $config += ['yith' => true, 'gateway' => true, 'supporting' => false, 'responses' => [], 'callback_probe_order_id' => 0, 'callback_barrier_count' => 0];
+        foreach (['yith', 'gateway', 'supporting'] as $key) {
+            if (!is_bool($config[$key])) { throw new InvalidArgumentException('Double mode must be boolean.'); }
+        }
+        if (!is_array($config['responses'])) { throw new InvalidArgumentException('Synthetic responses must be an array.'); }
+        if (!is_int($config['callback_probe_order_id']) || $config['callback_probe_order_id'] < 0
+            || !in_array($config['callback_barrier_count'], [0, 2], true)) { throw new InvalidArgumentException('Unsupported bounded callback probe.'); }
+        foreach ($config['responses'] as $path => $reply) {
+            if (!in_array($path, ['request.json', 'verify.json'], true) || !is_array($reply)
+                || !is_int($reply['status'] ?? null) || !is_string($reply['body'] ?? null)
+                || isset($reply['expected_body']) && !is_array($reply['expected_body'])) { throw new InvalidArgumentException('Unsupported synthetic response.'); }
+        }
+        $config = array_intersect_key($config, array_flip(['yith', 'gateway', 'supporting', 'responses', 'callback_probe_order_id', 'callback_barrier_count']));
+        $config['support_root'] = __DIR__;
+        // A fresh timing epoch prevents older callback arrivals from satisfying
+        // a later two-worker barrier for the same synthetic order.
+        $config['callback_probe_epoch'] = wp_generate_uuid4();
+        $path = $this->mu . '/zbm-task5-dependency-double-config.json';
+        $json = json_encode($config, JSON_THROW_ON_ERROR);
+        if (file_put_contents($path, $json, LOCK_EX) !== strlen($json)) { throw new RuntimeException('Unable to persist dependency-double configuration.'); }
+        if (!in_array($path, $this->created, true)) { $this->created[] = $path; }
+        $this->config = $config;
+    }
+    public function facts(string $cookie, int $orderId = 0): array {
+        if ($orderId < 0) { throw new InvalidArgumentException('Invalid synthetic order probe.'); }
+        $http = Task4EndpointHttp::get('task5-dependency-double-harness.php', $orderId > 0 ? ['order_id' => $orderId] : [], $cookie);
+        if ($http['status'] !== 200) { throw new RuntimeException('Double-backed facts HTTP failed with status ' . $http['status']); }
+        $facts = json_decode($http['body'], true, 64, JSON_THROW_ON_ERROR);
+        if (($facts['dependency_mode'] ?? null) !== 'double-backed' || ($facts['actual_http'] ?? null) !== true) { throw new RuntimeException('Double-backed facts label missing.'); }
+        return $facts;
+    }
+    public function calls(): array {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare('SELECT option_name, option_value FROM %i WHERE option_name LIKE %s ORDER BY option_id',
+            $wpdb->options, $wpdb->esc_like('zbm_task5_double_call_') . '%'), ARRAY_A);
+        if ($wpdb->last_error !== '') { throw new RuntimeException('Synthetic transport facts read failed.'); }
+        return array_map(static fn (array $row): array => maybe_unserialize($row['option_value']), $rows);
+    }
+    public function probes(): array {
+        global $wpdb;
+        $rows = $wpdb->get_col($wpdb->prepare('SELECT option_value FROM %i WHERE option_name LIKE %s ORDER BY option_id',
+            $wpdb->options, $wpdb->esc_like('zbm_task5_double_probe_') . '%'));
+        if ($wpdb->last_error !== '') { throw new RuntimeException('Callback probe facts read failed.'); }
+        return array_map('maybe_unserialize', $rows);
+    }
+    public function restore(): void {
+        foreach (array_reverse($this->created) as $path) { if (is_file($path) && !unlink($path)) { throw new RuntimeException('Unable to remove owned temporary double support.'); } }
+        $this->created = [];
+        foreach ($this->previous as $name => $previous) {
+            if ($previous['exists']) { update_option($name, $previous['value'], false); }
+            else { delete_option($name); }
+        }
+        $this->previous = [];
+        global $wpdb;
+        if ($wpdb instanceof wpdb) {
+            $wpdb->query($wpdb->prepare('DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s', $wpdb->options,
+                $wpdb->esc_like('zbm_task5_double_call_') . '%', $wpdb->esc_like('zbm_task5_double_probe_') . '%'));
+            if ($wpdb->last_error !== '') { throw new RuntimeException('Unable to clean synthetic call rows.'); }
+        }
+        if (is_resource($this->lock)) { flock($this->lock, LOCK_UN); fclose($this->lock); $this->lock = null; }
+    }
+}

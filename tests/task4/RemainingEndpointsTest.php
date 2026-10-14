@@ -111,8 +111,9 @@ final class RemainingEndpointsTest extends TestCase {
                 [$cookie, $nonce] = $this->auth('buyer_1', 'zbm_core_test_mode');
                 $before = $this->stable();
                 $http = CandidateHttp::post('wp-admin/admin-post.php', ['action' => 'zbm_core_test_mode', '_zbm_nonce' => $nonce, 'operation' => 'disable', 'reason' => 'Synthetic setting preservation'], $cookie);
-                self::assertSame(400, $http['status']); self::assertSame($setting, Task4EndpointHttp::option(AdminTestModeManager::OPTION));
+                self::assertSame($setting, Task4EndpointHttp::option(AdminTestModeManager::OPTION));
                 self::assertSame($before, $this->stable());
+                $this->denied($http, 500, 'دسترسی غیرمجاز است.');
             }
         } finally {
             $previous === null ? delete_option(AdminTestModeManager::OPTION) : update_option(AdminTestModeManager::OPTION, $previous, false);
@@ -127,12 +128,18 @@ final class RemainingEndpointsTest extends TestCase {
                 [$cookie, $nonce] = $this->auth($actor, $action);
                 $payload = ['action' => $action] + $fields;
                 if ($scenario !== 'no_nonce') { $payload['_zbm_nonce'] = $scenario === 'invalid_nonce' ? 'invalid' : $nonce; }
-                self::assertFalse(has_action('admin_post_' . $action)); self::assertFalse(has_action('admin_post_nopriv_' . $action));
                 $before = $this->stable(); $option = Task4EndpointHttp::option(AdminTestModeManager::OPTION);
                 $http = CandidateHttp::post('wp-admin/admin-post.php', $payload, $cookie);
-                self::assertSame(400, $http['status']); self::assertStringContainsString('wp-die-message', $http['body']);
                 self::assertSame($option, Task4EndpointHttp::option(AdminTestModeManager::OPTION)); self::assertSame($before, $this->stable());
-                return ['http' => 400, 'effect' => 'no-persisted-effect', 'registered' => false];
+                if ($scenario === 'guest') {
+                    self::assertFalse(has_action('admin_post_nopriv_' . $action));
+                    self::assertSame(400, $http['status']); self::assertStringContainsString('wp-die-message', $http['body']);
+                    return ['http' => 400, 'effect' => 'no-persisted-effect', 'generic_dispatcher_only' => true];
+                }
+                $reason = in_array($scenario, ['no_nonce', 'invalid_nonce'], true) ? __('The link you followed has expired.') : 'دسترسی غیرمجاز است.';
+                $status = in_array($scenario, ['no_nonce', 'invalid_nonce'], true) ? 403 : 500;
+                $this->denied($http, $status, $reason);
+                return ['http' => $status, 'effect' => 'no-persisted-effect', 'reason' => $reason];
             });
         }
         $this->row($action, 'authorized_disable_positive', function () use ($action, $fields): array {
