@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/Task5HttpRiskFixture.php';
+require_once __DIR__ . '/../support/Task5NativeAdminBootstrap.php';
 
 use PHPUnit\Framework\TestCase;
 use Zarbalman\Core\Application\ManualPaymentSettings;
@@ -11,6 +12,7 @@ use Zarbalman\Core\Infrastructure\{ProtectedText, DeliveryDataCrypto};
 final class HttpRiskControlsTest extends TestCase {
     private mixed $previousUnit;
     private mixed $previousSettings;
+    private array $adminBootstrap = [];
     private static array $evidence = [];
     private const FINANCE_MESSAGE = 'اقدام مالی با وضعیت فعلی پرونده سازگار نیست. آخرین وضعیت، مدرک و نتیجهٔ پرداخت را بررسی کنید؛ مبلغی تغییر نکرد.';
     private const FLOW_MESSAGE = 'عملیات پرونده انجام نشد؛ وضعیت، مهلت، نسخه و دسترسی را دوباره بررسی کنید.';
@@ -21,6 +23,8 @@ final class HttpRiskControlsTest extends TestCase {
         parent::setUp();
         $this->previousUnit = get_option('woocommerce_weight_unit', null);
         $this->previousSettings = get_option('zbm_core_real_manual_payment', null);
+        $this->adminBootstrap = Task5NativeAdminBootstrap::prime();
+        self::assertSame(200, $this->adminBootstrap['final_http'], 'Native admin bootstrap must finish before business fixtures.');
         update_option('woocommerce_weight_unit', 'kg');
         $repos = CandidateFixture::repositories();
         $users = Task4ManagedFixture::users();
@@ -267,6 +271,7 @@ final class HttpRiskControlsTest extends TestCase {
     }
 
     private function record(string $key, array $row): void {
+        $row['admin_bootstrap'] = $this->adminBootstrap;
         self::$evidence[$key] = $row;
         $path = __DIR__ . '/../../evidence/task5-http-risk-controls.json';
         if (!is_dir(dirname($path))) { self::assertTrue(mkdir(dirname($path), 0755, true)); }
