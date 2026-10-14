@@ -148,9 +148,10 @@ final class DependencyDoubleBackedTest extends TestCase {
         $before = Task4ManagedFixture::snapshot(); $emails = $this->emailFingerprint();
         $http = CandidateHttp::post('wp-admin/admin-post.php', ['action' => 'zbm_vendor_request_decision', 'decision' => 'accept',
             'request_id' => (string) $request->id(), 'version' => '0', 'idempotency_key' => wp_generate_uuid4(), '_zbm_nonce' => $nonce], $cookie);
-        self::assertSame(302, $http['status']);
+        self::assertSame(303, $http['status']);
         $notice = Task4EndpointHttp::option('_transient_zbm_vendor_notice_' . $request->vendorId());
         $this->record('observed-live-order-control', ['http' => $http['status'], 'observed_notice' => $notice,
+            'projection_diagnostics' => $this->doubles->projectionDiagnostics(),
             'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
         self::assertIsArray($notice);
         self::assertSame('success', $notice['type']); self::assertSame('تصمیم شما با موفقیت و به‌صورت غیرقابل‌برگشت ثبت شد.', $notice['message']);
@@ -197,6 +198,7 @@ final class DependencyDoubleBackedTest extends TestCase {
         $http = $this->recoverTest($request); self::assertSame(302, $http['status']);
         $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin'));
         $this->record('observed-native-legacy-recovery', ['http' => $http['status'], 'observed_notice' => $notice,
+            'projection_diagnostics' => $this->doubles->projectionDiagnostics(),
             'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
         self::assertIsArray($notice); self::assertSame('success', $notice['type']);
         $fresh = $repos['requests']->find($request->id()); self::assertSame('test', $fresh->executionMode()); self::assertSame('deposit_paid', $fresh->state()); self::assertSame(1, $fresh->version());
@@ -233,7 +235,7 @@ final class DependencyDoubleBackedTest extends TestCase {
         $this->record('double-backed-missing-yith-native-legacy-recovery-regression', ['test' => __METHOD__, 'facts' => $facts, 'http' => $http['status'],
             'request_id' => $request->id(), 'observed_notice' => $notice, 'observed_order_id' => $fresh->wcOrderId(),
             'observed_state' => $fresh->state(), 'observed_mode' => $fresh->executionMode(), 'observed_version' => $fresh->version(),
-            'observed_stock_reserved' => $fresh->stockReserved(), 'snapshot_unchanged' => $before === $after, 'before_snapshot' => $before, 'after_snapshot' => $after,
+            'observed_stock_reserved' => $fresh->stockReserved(), 'projection_diagnostics' => $this->doubles->projectionDiagnostics(), 'snapshot_unchanged' => $before === $after, 'before_snapshot' => $before, 'after_snapshot' => $after,
             'financial_counts' => $this->financialCounts($request->id()), 'account_emails_unchanged' => $emails === $this->emailFingerprint(),
             'expected_fail_closed' => true, 'observed_fail_closed' => $closed,
             'effect' => $closed ? 'Native recovery denied without mutation.' : 'Native recovery observation did not satisfy the dependency contract.'], $closed ? 'passed' : 'failed');

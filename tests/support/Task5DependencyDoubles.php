@@ -14,6 +14,7 @@ final class Task5DependencyDoubles {
     private mixed $lock;
     private array $config = [];
     private array $adminBootstrap = [];
+    private ?string $projectionDiagnosticsPath = null;
     private const MERCHANT = 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL';
 
     public static function install(array $config = []): self {
@@ -31,11 +32,20 @@ final class Task5DependencyDoubles {
     }
     private function start(array $config): void {
         $this->primeAdmin();
-        foreach (['zz-zbm-task5-dependency-double.php', 'zbm-task5-dependency-double-config.json'] as $name) {
+        foreach (['zz-zbm-task5-dependency-double.php', 'zbm-task5-dependency-double-config.json', 'zbm-task5-projection-diagnostics.jsonl'] as $name) {
             if (file_exists($this->mu . '/' . $name)) { throw new RuntimeException('Dependency-double runtime already exists.'); }
         }
         $harness = $this->root . '/task5-dependency-double-harness.php';
         if (file_exists($harness)) { throw new RuntimeException('Dependency-double harness already exists.'); }
+        // File writes survive the native creation transaction's ROLLBACK.
+        // Exclusive creation makes this fixture the only cleanup owner.
+        $diagnostics = $this->mu . '/zbm-task5-projection-diagnostics.jsonl';
+        $handle = fopen($diagnostics, 'x');
+        if (!is_resource($handle)) { throw new RuntimeException('Unable to create owned projection diagnostic file.'); }
+        $this->created[] = $diagnostics;
+        fclose($handle);
+        if (!chmod($diagnostics, 0600)) { throw new RuntimeException('Unable to restrict projection diagnostic file.'); }
+        $this->projectionDiagnosticsPath = $diagnostics;
         foreach (['woocommerce_WC_ZPal_settings', 'woocommerce_currency', 'woocommerce_weight_unit', 'woocommerce_manage_stock'] as $name) {
             $missing = new stdClass(); $value = get_option($name, $missing);
             $this->previous[$name] = ['exists' => $value !== $missing, 'value' => $value === $missing ? null : $value];
@@ -102,7 +112,24 @@ final class Task5DependencyDoubles {
         $facts = json_decode($http['body'], true, 64, JSON_THROW_ON_ERROR);
         if (($facts['dependency_mode'] ?? null) !== 'double-backed' || ($facts['actual_http'] ?? null) !== true) { throw new RuntimeException('Double-backed facts label missing.'); }
         $facts['admin_bootstrap'] = $this->adminBootstrap;
+        $facts['projection_diagnostics'] = $this->projectionDiagnostics();
         return $facts;
+    }
+    /** Only explicitly projected diagnostic fields; never native logger context. */
+    public function projectionDiagnostics(): array {
+        $path = $this->projectionDiagnosticsPath;
+        if ($path === null || !in_array($path, $this->created, true) || !is_file($path) || is_link($path)) {
+            throw new RuntimeException('Owned projection diagnostic file unavailable.');
+        }
+        $handle = fopen($path, 'rb');
+        if (!is_resource($handle)) { throw new RuntimeException('Projection diagnostics read failed.'); }
+        try {
+            if (!flock($handle, LOCK_SH)) { throw new RuntimeException('Projection diagnostics read lock failed.'); }
+            $rows = [];
+            while (($line = fgets($handle)) !== false) { $rows[] = json_decode($line, true, 64, JSON_THROW_ON_ERROR); }
+            if (!feof($handle)) { throw new RuntimeException('Projection diagnostics read was incomplete.'); }
+            return $rows;
+        } finally { flock($handle, LOCK_UN); fclose($handle); }
     }
     public function calls(): array {
         global $wpdb;
@@ -121,6 +148,7 @@ final class Task5DependencyDoubles {
     public function restore(): void {
         foreach (array_reverse($this->created) as $path) { if (is_file($path) && !unlink($path)) { throw new RuntimeException('Unable to remove owned temporary double support.'); } }
         $this->created = [];
+        $this->projectionDiagnosticsPath = null;
         foreach ($this->previous as $name => $previous) {
             if ($previous['exists']) { update_option($name, $previous['value'], false); }
             else { delete_option($name); }
