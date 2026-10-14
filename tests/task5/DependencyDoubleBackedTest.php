@@ -261,7 +261,11 @@ final class DependencyDoubleBackedTest extends TestCase {
         [$request, $repos, $product] = $this->request('test_pending', false); $emails = $this->emailFingerprint(); $before = Task4ManagedFixture::snapshot(); $initialStockRows = $this->productStockRows($product->get_id());
         $http = $this->recoverTest($request); self::assertSame(302, $http['status']);
         $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin'));
+        $freshObservation = $repos['requests']->find($request->id());
         $this->record('observed-native-legacy-recovery-without-physical-stock-tracking', ['http' => $http['status'], 'observed_notice' => $notice,
+            'before_request' => ['id' => $request->id(), 'state' => $request->state(), 'mode' => $request->executionMode(), 'version' => $request->version(), 'order_id' => $request->wcOrderId(), 'stock_reserved' => $request->stockReserved()],
+            'after_request' => ['id' => $freshObservation->id(), 'state' => $freshObservation->state(), 'mode' => $freshObservation->executionMode(), 'version' => $freshObservation->version(), 'order_id' => $freshObservation->wcOrderId(), 'stock_reserved' => $freshObservation->stockReserved()],
+            'financial_counts' => $this->financialCounts($request->id()), 'product_stock_before' => $initialStockRows, 'product_stock_after' => $this->productStockRows($product->get_id()),
             'projection_diagnostics' => $this->doubles->projectionDiagnostics(),
             'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
         self::assertIsArray($notice); self::assertSame('success', $notice['type']);
