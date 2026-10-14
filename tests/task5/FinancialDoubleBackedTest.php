@@ -203,13 +203,21 @@ final class FinancialDoubleBackedTest extends TestCase {
         $doubles = $this->install(); $fixture = new Task5FinancialFixture(); $fixture->configure($doubles, 100, true);
         $responses = Task5FinancialHttp::concurrent($fixture->callback());
         $this->observe('concurrent-duplicate', $fixture, $doubles, $responses);
-        $statuses = array_column($responses, 'status'); sort($statuses); self::assertSame([200, 302], $statuses,
-            'Concurrency requires two PHP workers; a barrier timeout is a failure, never proof of concurrency.');
+        // Both native order reads observe pending before the lock. The winner
+        // captures once; after the lock, DepositCapturePolicy allows only
+        // deposit_pending, deposit_expired, admin_review and late_payment_review.
+        // The other callback therefore receives the named deposit_paid denial.
+        $statuses = array_column($responses, 'status'); sort($statuses); self::assertSame([302, 409], $statuses,
+            'Overlapping pending-order callbacks must capture once and deny the already-paid request without a second financial effect.');
+        $denied = array_values(array_filter($responses, static fn (array $http): bool => $http['status'] === 409));
+        self::assertCount(1, $denied);
+        self::assertSame('request_not_payable', self::safeResponseFacts($denied[0])['response_reason']);
         $deadline = microtime(true) + 5;
         do {
             $probes = array_values(array_filter($doubles->probes(), static fn (array $probe): bool => $probe['order_id'] === $fixture->orderId));
             $starts = array_values(array_filter($probes, static fn (array $probe): bool => $probe['event'] === 'start'));
             $ends = array_values(array_filter($probes, static fn (array $probe): bool => $probe['event'] === 'end'));
+            $prelockReads = array_values(array_filter($probes, static fn (array $probe): bool => $probe['event'] === 'prelock_read'));
             if (count($ends) >= 2) { break; }
             usleep(10000);
         } while (microtime(true) < $deadline);
@@ -217,6 +225,16 @@ final class FinancialDoubleBackedTest extends TestCase {
         self::assertCount(1, array_unique(array_column($starts, 'epoch')));
         self::assertCount(2, array_unique(array_column($starts, 'pid'))); self::assertCount(2, array_unique(array_column($starts, 'identity')));
         $calls = self::verifyCalls($doubles); self::assertCount(1, $calls);
+        self::assertCount(2, $prelockReads, 'Both callback workers must read native pending status before Core acquires its callback lock.');
+        self::assertCount(2, array_unique(array_column($prelockReads, 'pid')));
+        self::assertCount(1, array_unique(array_column($prelockReads, 'epoch')));
+        self::assertSame($starts[0]['epoch'], $prelockReads[0]['epoch']);
+        $startPids = array_column($starts, 'pid'); sort($startPids);
+        $readPids = array_column($prelockReads, 'pid'); sort($readPids); self::assertSame($startPids, $readPids);
+        foreach ($prelockReads as $read) {
+            self::assertSame('pending', $read['status'], 'Timing observer must report the actual native status unchanged.');
+            self::assertLessThan($calls[0]['at'], $read['at'], 'Each native pending read must precede provider verification.');
+        }
         self::assertLessThanOrEqual($calls[0]['at'], max(array_column($starts, 'at')), 'Both workers arrived before provider verification under the native lock.');
         self::assertLessThan(min(array_column($ends, 'at')), max(array_column($starts, 'at')), 'Request lifetimes genuinely overlapped.');
         foreach ($starts as $start) {
@@ -230,6 +248,7 @@ final class FinancialDoubleBackedTest extends TestCase {
             'lifetimes_overlap' => true, 'probes' => $probes, 'http_statuses' => $statuses, 'financial' => $facts,
             'simulated_verify_calls' => self::safeCallFacts($calls),
             'native_paid_hook_events' => $events,
+            'prelock_pending_reads' => $prelockReads, 'duplicate_response_reason' => 'request_not_payable',
             'limitation' => 'Overlapping actual registered callbacks and idempotent SQL effects proved; no measured lock-wait duration is claimed.']);
     }
 

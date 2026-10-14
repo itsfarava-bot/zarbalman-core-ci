@@ -260,12 +260,35 @@ add_filter('woocommerce_logger_log_message', static function ($message, $level, 
 }, PHP_INT_MAX, 4);
 // Observe real callback request lifetimes before Core's callback lock. This
 // bounded two-worker barrier controls only test timing, never business state.
+add_filter('woocommerce_order_get_status', static function ($status, $order) use ($task5Config) {
+    if ($task5Config['callback_barrier_count'] !== 2 || !$order instanceof WC_Order
+        || $order->get_id() !== $task5Config['callback_probe_order_id'] || $status !== 'pending'
+        || strtolower((string) ($_GET['wc-api'] ?? '')) !== 'wc_zpal'
+        || !isset($GLOBALS['zbm_task5_callback_probe_identity']) || isset($GLOBALS['zbm_task5_pending_read_observed'])) { return $status; }
+    $GLOBALS['zbm_task5_pending_read_observed'] = true;
+    global $wpdb;
+    $identity = $GLOBALS['zbm_task5_callback_probe_identity'];
+    $prefix = 'zbm_task5_double_probe_prelock_' . $order->get_id() . '_' . $task5Config['callback_probe_epoch'] . '_';
+    $record = ['event' => 'prelock_read', 'order_id' => $order->get_id(), 'epoch' => $task5Config['callback_probe_epoch'],
+        'identity' => $identity, 'pid' => getmypid(), 'at' => microtime(true), 'status' => $status, 'dependency_mode' => 'double-backed'];
+    if (!add_option($prefix . $identity, $record, '', false)) { wp_die('Pending order probe recording failed closed.', '', ['response' => 500]); }
+    $deadline = microtime(true) + 5;
+    do {
+        $rows = $wpdb->get_col($wpdb->prepare('SELECT option_value FROM %i WHERE option_name LIKE %s', $wpdb->options, $wpdb->esc_like($prefix) . '%'));
+        if ($wpdb->last_error !== '') { wp_die('Pending order barrier read failed closed.', '', ['response' => 500]); }
+        $pids = array_unique(array_map(static fn ($value): int => (int) (maybe_unserialize($value)['pid'] ?? 0), $rows));
+        if (count($pids) >= 2 && !in_array(0, $pids, true)) { return $status; }
+        usleep(10000);
+    } while (microtime(true) < $deadline);
+    wp_die('Two distinct callback workers did not read the pending order.', '', ['response' => 503]);
+}, PHP_INT_MAX, 2);
 add_action('init', static function () use ($task5Config): void {
     $order = $task5Config['callback_probe_order_id'];
     if ($order < 1 || absint($_GET['wc_order'] ?? 0) !== $order || strtolower((string) ($_GET['wc-api'] ?? '')) !== 'wc_zpal') { return; }
     global $wpdb;
     $epoch = $task5Config['callback_probe_epoch'];
     $identity = wp_generate_uuid4(); $prefix = 'zbm_task5_double_probe_start_' . $order . '_' . $epoch . '_';
+    $GLOBALS['zbm_task5_callback_probe_identity'] = $identity;
     $record = ['event' => 'start', 'order_id' => $order, 'epoch' => $epoch, 'identity' => $identity, 'pid' => getmypid(), 'at' => microtime(true), 'dependency_mode' => 'double-backed'];
     if (!add_option($prefix . $identity, $record, '', false)) { wp_die('Callback probe recording failed closed.', '', ['response' => 500]); }
     add_action('shutdown', static function () use ($order, $identity, $epoch): void {
