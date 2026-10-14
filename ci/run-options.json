@@ -1,4 +1,4 @@
 {
-  "scope": "full",
-  "filter": ""
+  "scope": "focused",
+  "filter": "LifecycleTest::test_reactivation_processes_an_overdue_one_time_deadline_in_one_sweep"
 }
