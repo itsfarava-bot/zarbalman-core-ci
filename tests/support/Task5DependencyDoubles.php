@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/Task4EndpointHttp.php';
+require_once __DIR__ . '/HttpClient.php';
 
 /** Explicit double-backed dependencies, installed only into a disposable runtime.
  * No production objects, actors, capabilities, eligibility, or health reports are replaced.
@@ -12,6 +13,7 @@ final class Task5DependencyDoubles {
     private array $created = [];
     private mixed $lock;
     private array $config = [];
+    private array $adminBootstrap = [];
     private const MERCHANT = 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL';
 
     public static function install(array $config = []): self {
@@ -28,6 +30,7 @@ final class Task5DependencyDoubles {
         if (!is_resource($this->lock) || !flock($this->lock, LOCK_EX | LOCK_NB)) { throw new RuntimeException('Another dependency-double fixture owns this sandbox.'); }
     }
     private function start(array $config): void {
+        $this->primeAdmin();
         foreach (['zz-zbm-task5-dependency-double.php', 'zbm-task5-dependency-double-config.json'] as $name) {
             if (file_exists($this->mu . '/' . $name)) { throw new RuntimeException('Dependency-double runtime already exists.'); }
         }
@@ -70,12 +73,35 @@ final class Task5DependencyDoubles {
         if (!in_array($path, $this->created, true)) { $this->created[] = $path; }
         $this->config = $config;
     }
+    private function primeAdmin(): void {
+        $admin = get_user_by('login', 'zbm_test_admin');
+        if (!$admin instanceof WP_User || !user_can($admin, 'manage_options')) { throw new RuntimeException('Native sandbox administrator required.'); }
+        $actor = get_current_user_id(); $hadCookie = isset($_COOKIE[LOGGED_IN_COOKIE]); $oldCookie = $_COOKIE[LOGGED_IN_COOKIE] ?? null;
+        try {
+            [$cookie] = CandidateHttp::auth((int) $admin->ID, 'task5-admin-bootstrap');
+            for ($attempt = 0; $attempt < 2; ++$attempt) {
+                $http = Task4EndpointHttp::get('wp-admin/index.php', [], $cookie);
+                $location = Task4EndpointHttp::header($http, 'Location'); $query = [];
+                parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+                $this->adminBootstrap[] = ['http' => $http['status'], 'path' => parse_url($location, PHP_URL_PATH), 'page' => $query['page'] ?? null];
+                if ($http['status'] === 200) { return; }
+                if ($http['status'] !== 302 || parse_url(home_url('/'), PHP_URL_HOST) !== parse_url($location, PHP_URL_HOST)
+                    || !str_starts_with((string) parse_url($location, PHP_URL_PATH), '/wp-admin/')) { throw new RuntimeException('Unexpected native admin bootstrap response.'); }
+            }
+            $http = Task4EndpointHttp::get('wp-admin/index.php', [], $cookie);
+            if ($http['status'] !== 200) { throw new RuntimeException('Native admin bootstrap did not complete.'); }
+        } finally {
+            wp_set_current_user($actor);
+            if ($hadCookie) { $_COOKIE[LOGGED_IN_COOKIE] = $oldCookie; } else { unset($_COOKIE[LOGGED_IN_COOKIE]); }
+        }
+    }
     public function facts(string $cookie, int $orderId = 0): array {
         if ($orderId < 0) { throw new InvalidArgumentException('Invalid synthetic order probe.'); }
         $http = Task4EndpointHttp::get('task5-dependency-double-harness.php', $orderId > 0 ? ['order_id' => $orderId] : [], $cookie);
         if ($http['status'] !== 200) { throw new RuntimeException('Double-backed facts HTTP failed with status ' . $http['status']); }
         $facts = json_decode($http['body'], true, 64, JSON_THROW_ON_ERROR);
         if (($facts['dependency_mode'] ?? null) !== 'double-backed' || ($facts['actual_http'] ?? null) !== true) { throw new RuntimeException('Double-backed facts label missing.'); }
+        $facts['admin_bootstrap'] = $this->adminBootstrap;
         return $facts;
     }
     public function calls(): array {

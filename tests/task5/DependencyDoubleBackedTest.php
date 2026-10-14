@@ -132,9 +132,11 @@ final class DependencyDoubleBackedTest extends TestCase {
     }
     private function financialCounts(int $request): array {
         global $wpdb; $schema = new Schema($wpdb); $counts = [];
-        foreach (['payments' => $schema->payments_table(), 'ledger' => $schema->ledger_table(), 'actions' => $schema->financial_actions_table(), 'dokan_mirrors' => $schema->dokan_credit_mirrors_table()] as $name => $table) {
+        foreach (['payments' => $schema->payments_table(), 'ledger' => $schema->ledger_table(), 'actions' => $schema->financial_actions_table()] as $name => $table) {
             $counts[$name] = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM %i WHERE request_id=%d', $table, $request)); self::assertSame('', $wpdb->last_error);
         }
+        $counts['dokan_mirrors'] = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM %i mirror INNER JOIN %i request ON request.wc_order_id=mirror.order_id WHERE request.id=%d', $schema->dokan_credit_mirrors_table(), $schema->purchase_requests_table(), $request));
+        self::assertSame('', $wpdb->last_error);
         return $counts;
     }
     public function test_double_backed_missing_yith_blocks_actual_live_order_creation_without_a_gateway_failure(): void {
@@ -148,6 +150,9 @@ final class DependencyDoubleBackedTest extends TestCase {
             'request_id' => (string) $request->id(), 'version' => '0', 'idempotency_key' => wp_generate_uuid4(), '_zbm_nonce' => $nonce], $cookie);
         self::assertSame(302, $http['status']);
         $notice = Task4EndpointHttp::option('_transient_zbm_vendor_notice_' . $request->vendorId());
+        $this->record('observed-live-order-control', ['http' => $http['status'], 'observed_notice' => $notice,
+            'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
+        self::assertIsArray($notice);
         self::assertSame('success', $notice['type']); self::assertSame('تصمیم شما با موفقیت و به‌صورت غیرقابل‌برگشت ثبت شد.', $notice['message']);
         self::assertSame($before, Task4ManagedFixture::snapshot()); self::assertSame($emails, $this->emailFingerprint());
         $fresh = $repos['requests']->find($request->id()); self::assertNull($fresh->wcOrderId()); self::assertFalse($fresh->stockReserved());
@@ -188,9 +193,12 @@ final class DependencyDoubleBackedTest extends TestCase {
     public function test_double_backed_present_yith_native_legacy_recovery_positive_with_new_phone_only_customer(): void {
         global $wpdb;
         $facts = $this->facts(['yith' => true, 'gateway' => true, 'supporting' => true]); $this->onlyFailures($facts, []);
-        [$request, $repos, $product] = $this->request('test_pending'); $emails = $this->emailFingerprint();
+        [$request, $repos, $product] = $this->request('test_pending'); $emails = $this->emailFingerprint(); $before = Task4ManagedFixture::snapshot();
         $http = $this->recoverTest($request); self::assertSame(302, $http['status']);
-        $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin')); self::assertSame('success', $notice['type']);
+        $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin'));
+        $this->record('observed-native-legacy-recovery', ['http' => $http['status'], 'observed_notice' => $notice,
+            'location_path' => parse_url(Task4EndpointHttp::header($http, 'Location'), PHP_URL_PATH)], 'pending');
+        self::assertIsArray($notice); self::assertSame('success', $notice['type']);
         $fresh = $repos['requests']->find($request->id()); self::assertSame('test', $fresh->executionMode()); self::assertSame('deposit_paid', $fresh->state()); self::assertSame(1, $fresh->version());
         $order = wc_get_order($fresh->wcOrderId()); self::assertInstanceOf(WC_Order::class, $order); self::assertTrue(ManagedOrderSnapshot::matches($order, $fresh));
         self::assertSame('test', ManagedOrderSnapshot::route($order)); self::assertSame('pending', $order->get_status()); self::assertFalse($order->is_paid());
@@ -200,6 +208,10 @@ final class DependencyDoubleBackedTest extends TestCase {
         $stock = $wpdb->get_var($wpdb->prepare('SELECT meta_value FROM %i WHERE post_id=%d AND meta_key=%s', $wpdb->postmeta, $product->get_id(), '_stock'));
         self::assertSame('', $wpdb->last_error); self::assertSame('99', $stock);
         self::assertSame(['payments' => 0, 'ledger' => 0, 'actions' => 0, 'dokan_mirrors' => 0], $this->financialCounts($request->id()));
+        $after = Task4ManagedFixture::snapshot(); $schema = new Schema($wpdb);
+        foreach ([$schema->payments_table(), $schema->ledger_table(), $schema->financial_actions_table(), $schema->dokan_credit_mirrors_table()] as $table) {
+            self::assertSame($before[$table], $after[$table], 'Legacy recovery must preserve all financial rows.');
+        }
         self::assertSame($emails, $this->emailFingerprint()); self::assertSame([], $this->doubles->calls());
         [$adminCookie] = CandidateHttp::auth($this->user('admin'), 'task5-native-yith-guards');
         $guardFacts = $this->doubles->facts($adminCookie, $order->get_id());
