@@ -36,7 +36,9 @@ wp_send_json(['dependency_mode' => 'double-backed', 'actual_http' => true, 'real
     'manual_error' => $error($health->manualOrderError()), 'test_managed_error' => $error($health->testManagedOrderError()),
     'verification_error' => $error($health->paymentVerificationError()),
     'request_control_registered' => has_action('admin_post_zbm_admin_request_control') !== false,
-    'balance_callback_registered' => has_action('woocommerce_api_zbm_balance_callback') !== false,
+    'balance_callback_registered' => has_action('admin_post_zbm_balance_callback') !== false && has_action('admin_post_nopriv_zbm_balance_callback') !== false,
+    'balance_callback_hooks' => ['admin_post_zbm_balance_callback' => has_action('admin_post_zbm_balance_callback') !== false,
+        'admin_post_nopriv_zbm_balance_callback' => has_action('admin_post_nopriv_zbm_balance_callback') !== false],
     'legacy_test_mode_registered' => has_action('admin_post_zbm_core_test_mode') !== false,
     'yith_physical_guard_registered' => has_filter('yith_wcdp_virtual_on_deposit') !== false,
     'yith_balance_guard_registered' => has_filter('yith_wcdp_skip_suborder_creation') !== false]);

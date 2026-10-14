@@ -58,9 +58,11 @@ final class DependencyDoubleBackedTest extends TestCase {
         $this->doubles = Task5DependencyDoubles::install($config);
         [$cookie] = CandidateHttp::auth($this->user('admin'), 'task5-double-backed-facts');
         $facts = $this->doubles->facts($cookie);
+        $this->record('observed-native-registry:' . $this->getName(false), ['facts' => $facts], 'pending');
         self::assertSame('double-backed', $facts['dependency_mode']); self::assertTrue($facts['actual_http']);
         self::assertSame([0], $facts['managed_callback_priorities']);
         self::assertTrue($facts['request_control_registered']); self::assertTrue($facts['balance_callback_registered']);
+        self::assertSame(['admin_post_zbm_balance_callback' => true, 'admin_post_nopriv_zbm_balance_callback' => true], $facts['balance_callback_hooks']);
         self::assertTrue($facts['yith_physical_guard_registered']); self::assertTrue($facts['yith_balance_guard_registered']);
         return $facts;
     }
