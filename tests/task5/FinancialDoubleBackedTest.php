@@ -70,7 +70,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         $observation['financial'] = $fixture->facts();
         Task5FinancialFixture::evidence('observation-' . $scenario, $observation);
     }
-    private function callback(string $scenario, Task5FinancialFixture $fixture, Task5DependencyDoubles $doubles, string $status = 'OK'): array {
+    private function performObservedCallback(string $scenario, Task5FinancialFixture $fixture, Task5DependencyDoubles $doubles, string $status = 'OK'): array {
         $started = microtime(true);
         $http = Task5FinancialHttp::callback($fixture->callback($status));
         $http['duration_seconds'] = microtime(true) - $started;
@@ -111,7 +111,7 @@ final class FinancialDoubleBackedTest extends TestCase {
             self::assertSame($gross, $candidate + Amounts::remaining($gross, $candidate));
             $fixture = new Task5FinancialFixture($gross, $candidate); $fixture->configure($doubles);
             $offset = count($doubles->calls());
-            self::assertSame(302, $this->callback('integer-' . $gross, $fixture, $doubles)['status']);
+            self::assertSame(302, $this->performObservedCallback('integer-' . $gross, $fixture, $doubles)['status']);
             $facts = $fixture->assertCaptured($platform, $vendor); $calls = self::verifyCalls($doubles, $offset);
             self::assertCount(1, $calls); self::assertIsInt($calls[0]['amount']); self::assertSame($candidate * 10, $calls[0]['amount']);
             self::assertTrue($calls[0]['expected_binding_matches']); self::assertTrue($calls[0]['merchant_is_synthetic']);
@@ -163,7 +163,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         self::assertFalse(apply_filters('yith_wcdp_virtual_on_deposit', true, $order));
         self::assertTrue(apply_filters('yith_wcdp_skip_suborder_creation', false, $item->get_id(), $item, $order->get_id(), $order, $item->get_product()));
         self::assertFalse($item->get_product()->is_virtual());
-        $new->configure($doubles); self::assertSame(302, $this->callback('yith-projection', $new, $doubles)['status']);
+        $new->configure($doubles); self::assertSame(302, $this->performObservedCallback('yith-projection', $new, $doubles)['status']);
         $facts = $new->assertCaptured(1, 10);
         self::assertSame([], wc_get_orders(['parent' => $new->orderId, 'return' => 'ids', 'limit' => -1]));
         Task5FinancialFixture::evidence('yith-projection', ['legacy_unit_deposit' => '9.9', 'legacy_unit_balance' => '89.1',
@@ -174,10 +174,10 @@ final class FinancialDoubleBackedTest extends TestCase {
 
     public function test_actual_http_sequential_duplicate_persists_one_payment_three_legs_one_event(): void {
         $doubles = $this->install(); $fixture = new Task5FinancialFixture(); $fixture->configure($doubles);
-        self::assertSame(302, $this->callback('sequential-first', $fixture, $doubles)['status']);
+        self::assertSame(302, $this->performObservedCallback('sequential-first', $fixture, $doubles)['status']);
         $first = $fixture->assertCaptured(10, 90); $callsBefore = count($doubles->calls());
         $firstEvents = $doubles->events($fixture->id); self::assertCount(1, $firstEvents, 'The first actual HTTP callback must announce the native paid hook once.');
-        $secondHttp = $this->callback('sequential-replay', $fixture, $doubles);
+        $secondHttp = $this->performObservedCallback('sequential-replay', $fixture, $doubles);
         self::assertSame(200, $secondHttp['status']);
         self::assertSame($first, $fixture->assertCaptured(10, 90)); self::assertSame($callsBefore, count($doubles->calls()));
         self::assertSame($firstEvents, $doubles->events($fixture->id), 'Paid HTTP replay must not announce the native paid hook again.');
@@ -237,11 +237,11 @@ final class FinancialDoubleBackedTest extends TestCase {
         global $wpdb;
         $doubles = $this->install(); $fixture = new Task5FinancialFixture(); $fixture->configure($doubles);
         self::assertSame(1, $wpdb->update((new Schema($wpdb))->payments_table(), ['expected_amount_toman' => 101], ['request_id' => $fixture->id]));
-        self::assertSame(409, $this->callback('amount-intent-mismatch', $fixture, $doubles)['status']);
+        self::assertSame(409, $this->performObservedCallback('amount-intent-mismatch', $fixture, $doubles)['status']);
         $corrupt = $fixture->assertNoCash(); self::assertSame('authority_issued', $corrupt['payment'][0]['status']);
         self::assertCount(0, self::verifyCalls($doubles));
         $bound = new Task5FinancialFixture(); $bound->configure($doubles, 100, false, 1001);
-        self::assertSame(503, $this->callback('amount-bound-mismatch', $bound, $doubles)['status']);
+        self::assertSame(503, $this->performObservedCallback('amount-bound-mismatch', $bound, $doubles)['status']);
         $boundFacts = $bound->assertNoCash(); self::assertSame('callback_received_on_time', $boundFacts['payment'][0]['status']);
         $calls = self::verifyCalls($doubles); self::assertCount(1, $calls); self::assertSame(1000, $calls[0]['amount']);
         self::assertFalse($calls[0]['expected_binding_matches']);
@@ -253,7 +253,7 @@ final class FinancialDoubleBackedTest extends TestCase {
     public function test_provider_errors_code_rejection_must_release_receipt_without_cash(): void {
         $doubles = $this->install(); $failed = new Task5FinancialFixture(); $failed->configure($doubles, -51);
         // Explicit errors.code rejection keeps the exact negative contract.
-        self::assertSame(400, $this->callback('provider-errors-envelope', $failed, $doubles)['status']);
+        self::assertSame(400, $this->performObservedCallback('provider-errors-envelope', $failed, $doubles)['status']);
         $failedFacts = $failed->assertNoCash(); self::assertSame('authority_issued', $failedFacts['payment'][0]['status']);
         self::assertSame('deposit_pending', $failedFacts['state']); self::assertCount(1, self::verifyCalls($doubles));
         Task5FinancialFixture::evidence('provider-errors-envelope', ['failed_http_status' => 400, 'failed' => $failedFacts]);
@@ -268,7 +268,7 @@ final class FinancialDoubleBackedTest extends TestCase {
                 'body' => wp_json_encode(['data' => ['code' => -51], 'errors' => []], JSON_THROW_ON_ERROR),
                 'expected_body' => ['amount' => 1000, 'authority' => $failed->authority,
                     'merchant_id' => 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL']]]]);
-        self::assertSame(400, $this->callback('normalized-data-code-rejected', $failed, $doubles)['status']);
+        self::assertSame(400, $this->performObservedCallback('normalized-data-code-rejected', $failed, $doubles)['status']);
         $facts = $failed->assertNoCash(); self::assertSame('authority_issued', $facts['payment'][0]['status']);
         self::assertSame('deposit_pending', $facts['state']); self::assertCount(1, self::verifyCalls($doubles));
         Task5FinancialFixture::evidence('normalized-data-code-rejected', ['explicit_normalized_double_envelope' => true,
@@ -278,7 +278,7 @@ final class FinancialDoubleBackedTest extends TestCase {
     public function test_provider_cancelled_return_produces_no_cash_or_verification(): void {
         $doubles = $this->install();
         $cancelled = new Task5FinancialFixture(); $cancelled->configure($doubles); $before = $cancelled->facts(); $callsBefore = count($doubles->calls());
-        self::assertSame(200, $this->callback('cancelled-provider', $cancelled, $doubles, 'NOK')['status']);
+        self::assertSame(200, $this->performObservedCallback('cancelled-provider', $cancelled, $doubles, 'NOK')['status']);
         self::assertSame($before, $cancelled->assertNoCash()); self::assertSame($callsBefore, count($doubles->calls()));
         Task5FinancialFixture::evidence('provider-cancelled', ['provider_cancelled_http_status' => 200,
             'cancelled' => $before, 'cancelled_verify_calls' => 0,
@@ -293,9 +293,9 @@ final class FinancialDoubleBackedTest extends TestCase {
         self::assertSame($fixture->authority, $expiry['after']['payment'][0]['authority']);
         self::assertNotSame('expired', $expiry['after']['payment'][0]['status'], 'Unresolved issued identity must stay held for recovery.');
         $fixture->assertNoCash(); $fixture->configure($doubles);
-        self::assertSame(302, $this->callback('issued-review-late-first', $fixture, $doubles)['status']);
+        self::assertSame(302, $this->performObservedCallback('issued-review-late-first', $fixture, $doubles)['status']);
         $facts = $fixture->assertCaptured(0, 0, true); self::assertCount(1, self::verifyCalls($doubles));
-        $callsBefore = count($doubles->calls()); self::assertSame(200, $this->callback('issued-review-late-replay', $fixture, $doubles)['status']);
+        $callsBefore = count($doubles->calls()); self::assertSame(200, $this->performObservedCallback('issued-review-late-replay', $fixture, $doubles)['status']);
         self::assertSame($facts, $fixture->assertCaptured(0, 0, true)); self::assertSame($callsBefore, count($doubles->calls()));
         Task5FinancialFixture::evidence('late-after-issued-identity-review', ['native_expiry_attempt' => true,
             'native_deposit_expired_transition' => false, 'unresolved_issued_identity_retained_for_review' => true,
@@ -307,7 +307,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         $doubles = $this->install(); $fixture = new Task5FinancialFixture(1000, 100, 0, 2, false);
         $expiry = $fixture->expireNatively(); self::assertSame('expired', $expiry['after']['payment'][0]['status']);
         $fixture->configure($doubles); $before = $fixture->assertNoCash();
-        self::assertSame(400, $this->callback('native-expired-no-identity', $fixture, $doubles)['status']);
+        self::assertSame(400, $this->performObservedCallback('native-expired-no-identity', $fixture, $doubles)['status']);
         self::assertSame($before, $fixture->assertNoCash()); self::assertCount(0, self::verifyCalls($doubles));
         Task5FinancialFixture::evidence('native-expired-no-identity', ['native_deposit_expired_transition' => true,
             'issued_identity_present' => false, 'expiry' => $expiry, 'callback_http_status' => 400, 'financial' => $before]);
@@ -321,7 +321,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         self::assertSame('admin_review', $fixture->request()->state()); $fixture->assertNoCash();
         // Defensive test ONLY: normal lifecycle above explicitly refused this state.
         $fixture->persistedFixtureFields(['current_state' => 'cancelled']); $fixture->configure($doubles); $before = $fixture->facts();
-        self::assertSame(409, $this->callback('stale-cancelled', $fixture, $doubles)['status']);
+        self::assertSame(409, $this->performObservedCallback('stale-cancelled', $fixture, $doubles)['status']);
         self::assertSame($before, $fixture->assertNoCash()); self::assertCount(0, self::verifyCalls($doubles));
         Task5FinancialFixture::evidence('stale-cancelled-fixture', ['native_cancel_refused_issued_identity' => true,
             'native_error' => $result->get_error_code(), 'stale_corrupt_cancelled_fixture' => true, 'callback_http_status' => 409, 'financial' => $before]);
@@ -333,7 +333,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         $result = Task5FinancialFixture::service()->cancelUnpaidAdminReview($fixture->id, $fixture->users['admin'], $request->version(), 'Synthetic native cancellation before issuance');
         self::assertInstanceOf(\Zarbalman\Core\Domain\PurchaseRequest\PurchaseRequest::class, $result);
         self::assertSame('cancelled', $fixture->request()->state()); $fixture->configure($doubles); $before = $fixture->facts();
-        self::assertSame(400, $this->callback('normal-cancel-no-identity', $fixture, $doubles)['status']);
+        self::assertSame(400, $this->performObservedCallback('normal-cancel-no-identity', $fixture, $doubles)['status']);
         self::assertSame($before, $fixture->assertNoCash()); self::assertCount(0, self::verifyCalls($doubles));
         Task5FinancialFixture::evidence('normal-cancel-no-identity', ['admin_review_setup_fixture' => true, 'native_cancel_succeeded' => true,
             'authority_was_issued' => false, 'forged_callback_http_status' => 400, 'financial' => $before]);
