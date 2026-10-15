@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "GuestStructureTest|RegisteredHttpSurfacesTest|test_three_rest_methods_have_nonce_ownership_matrix_and_http_positives"
+  "filter": "GuestStructureTest"
 }
