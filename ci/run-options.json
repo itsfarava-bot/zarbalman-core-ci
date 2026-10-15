@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "ZarinpalResponseContractTest|FinancialDoubleBackedTest"
+  "filter": "DokanAmountContractTest"
 }

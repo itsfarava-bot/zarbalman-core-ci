@@ -30,6 +30,7 @@
       <file>tests/task5/DependencyDoubleBackedTest.php</file>
       <file>tests/task5/FinancialDoubleBackedTest.php</file>
       <file>tests/task6/ZarinpalResponseContractTest.php</file>
+      <file>tests/task6/DokanAmountContractTest.php</file>
       <file>tests/task4/HttpRiskControlsTest.php</file>
     </testsuite>
   </testsuites>
