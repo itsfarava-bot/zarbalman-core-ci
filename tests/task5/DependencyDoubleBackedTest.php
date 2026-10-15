@@ -312,6 +312,11 @@ final class DependencyDoubleBackedTest extends TestCase {
         [$adminCookie] = CandidateHttp::auth($this->user('admin'), 'task5-native-yith-guards');
         $guardFacts = $this->doubles->facts($adminCookie, $order->get_id());
         self::assertFalse($guardFacts['native_yith_guard_probe']['physical_result']); self::assertTrue($guardFacts['native_yith_guard_probe']['skip_balance_result']);
+        $committed = Task4ManagedFixture::snapshot();
+        $repeat = $this->recoverTest($request);
+        self::assertSame(302, $repeat['status']);
+        self::assertSame($committed, Task4ManagedFixture::snapshot(), 'Replaying the committed native action must not create an order, audit, stock or financial effect.');
+        self::assertSame($order->get_id(), $repos['requests']->find($request->id())->wcOrderId());
         $this->record('double-backed-native-legacy-recovery-positive-without-physical-stock-tracking', ['test' => __METHOD__, 'facts' => $facts, 'http' => $http['status'],
             'request_id' => $request->id(), 'order_id' => $order->get_id(), 'snapshot_matches' => true,
             'fixture_new_empty_email_customer' => true, 'fixture_physical_stock_tracking' => false, 'product_stock_before' => $initialStockRows, 'product_stock_after' => $stockRows, 'observed_logical_stock_reserved' => $fresh->stockReserved(), 'account_emails_unchanged' => true, 'financial_counts' => $this->financialCounts($request->id()), 'native_yith_guard_probe' => $guardFacts['native_yith_guard_probe'],
