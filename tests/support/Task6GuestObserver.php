@@ -3,28 +3,7 @@ declare(strict_types=1);
 
 // CI-only observer. It returns WordPress's original wp_die handler unchanged.
 // Copy only into the disposable sandbox's mu-plugins directory.
-add_filter('wp_redirect', static function (string $location, int $status): string {
-    if (defined('ZBM_TEST_SANDBOX') && ZBM_TEST_SANDBOX === true && ($_POST['_zbm_guest_structure'] ?? null) === '1') {
-        file_put_contents(dirname(ABSPATH, 2) . '/evidence/guest-redirect-debug.json', json_encode([
-            'status' => $status, 'location' => $location,
-            'functions' => array_column(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10), 'function'),
-        ], JSON_THROW_ON_ERROR));
-    }
-    return $location;
-}, PHP_INT_MAX, 2);
-if (($_POST['_zbm_guest_structure'] ?? null) === '1') {
-    file_put_contents(dirname(ABSPATH, 2) . '/evidence/guest-observer-debug.json', json_encode([
-        'loaded' => true, 'sandbox' => defined('ZBM_TEST_SANDBOX') && ZBM_TEST_SANDBOX === true,
-        'html_filter' => false, 'ajax_filter' => false,
-    ], JSON_THROW_ON_ERROR));
-}
 $zbm_guest_observer = static function (mixed $handler): mixed {
-    if (($_POST['_zbm_guest_structure'] ?? null) === '1') {
-        file_put_contents(dirname(ABSPATH, 2) . '/evidence/guest-observer-debug.json', json_encode([
-            'loaded' => true, 'sandbox' => defined('ZBM_TEST_SANDBOX') && ZBM_TEST_SANDBOX === true,
-            'html_filter' => current_filter() === 'wp_die_handler', 'ajax_filter' => current_filter() === 'wp_die_ajax_handler',
-        ], JSON_THROW_ON_ERROR));
-    }
     if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true || ($_POST['_zbm_guest_structure'] ?? null) !== '1') {
         return $handler;
     }

@@ -39,6 +39,21 @@ final class GuestStructureTest extends TestCase {
         }
         self::assertNotEmpty($groups);
         $fixture = new Task4ManagedFixture('flow_note');
+        // Complete Dokan's one-time fresh-install admin redirect before measuring
+        // guest requests. Use a real authenticated request to an absent callback;
+        // keep every production hook and guard registered.
+        $warmupAction = 'zbm_task6_unregistered_warmup';
+        self::assertFalse(has_action('admin_post_' . $warmupAction));
+        [$adminCookie] = CandidateHttp::auth($fixture->users['admin'], 'unused-guest-fixture-warmup');
+        $warmup = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $warmupAction], $adminCookie);
+        if ($warmup['status'] === 302) {
+            self::assertSame(add_query_arg(['page' => 'dokan-setup'], admin_url('index.php')),
+                Task4EndpointHttp::header($warmup, 'Location'));
+        } else {
+            self::assertSame(400, $warmup['status']);
+        }
+        $warmup = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $warmupAction], $adminCookie);
+        self::assertSame(400, $warmup['status'], 'Disposable admin initialization must finish before the guest measurements.');
         wp_set_current_user(0); unset($_COOKIE[LOGGED_IN_COOKIE]);
         $records = ['_meta' => ['schema_version' => 1, 'run_id' => getenv('GITHUB_RUN_ID') ?: 'local',
             'run_attempt' => getenv('GITHUB_RUN_ATTEMPT') ?: 'local']];
@@ -49,10 +64,6 @@ final class GuestStructureTest extends TestCase {
             $http = CandidateHttp::post($group['path'], ['action' => $group['action'], '_zbm_guest_structure' => '1',
                 'request_id' => (string) $fixture->id, 'order_id' => (string) $fixture->orderId, 'operation' => 'flow_note'], '');
             $after = $this->snapshot();
-            file_put_contents(__DIR__ . '/../../evidence/guest-response-debug.json', wp_json_encode([
-                'http' => $http['status'], 'scope_header' => Task4EndpointHttp::header($http, 'X-Zbm-Guest-Scope') !== '',
-                'json_response' => str_contains(Task4EndpointHttp::header($http, 'Content-Type'), 'json'),
-            ], JSON_THROW_ON_ERROR));
             self::assertSame('native-dispatcher-wp-die', Task4EndpointHttp::header($http, 'X-Zbm-Guest-Scope'));
             self::assertSame($group['guest'], Task4EndpointHttp::header($http, 'X-Zbm-Guest-Hook'));
             self::assertSame('0', Task4EndpointHttp::header($http, 'X-Zbm-Guest-Hook-Present'), 'Private action must have no guest callback: ' . $hook);
