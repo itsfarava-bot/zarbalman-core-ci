@@ -1,0 +1,7 @@
+{
+  "RemainingEndpointsTest::test_testmode_wrong_role_preserves_each_legacy_setting": "a7704e29ba636997087068862d3920b43ce8ee0a1926ad47a6b0c255d111b692",
+  "RemainingEndpointsTest::test_admin_testmode_disable_is_durable_and_enable_is_retired": "a7704e29ba636997087068862d3920b43ce8ee0a1926ad47a6b0c255d111b692",
+  "LegacyRequestFormControlsTest::test_actual_legacy_recovery_form_creates_only_quarantined_test_order_and_stock_reservation": "e38796ea47802db5571640182769798090f94398a7f417e1ee93e177639f519e",
+  "RegisteredHttpSurfacesTest::test_production_surface_callback_is_actually_registered with data set \"http-003\"": "8b0c5cd4a11b2983792912a71c69423fad3a0be21ccf824d641c748e5aa0e150",
+  "RegisteredHttpSurfacesTest::test_production_surface_callback_is_actually_registered with data set \"http-004\"": "49a89f12ae55b190a0e61f989febcc6ffd9907aaa86630c6ff2c10c0c7ee0f2a"
+}

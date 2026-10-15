@@ -85,6 +85,8 @@ class SuitePartitionTest(unittest.TestCase):
             M.selection({'ZBM_TEST_SCOPE': 'focused'})
 
     def run_fake_native(self, root, exit_code=0, list_exit=0, bad_membership=False):
+        (root / 'ci').mkdir()
+        (root / 'ci/deferred-tests.json').write_text('{}')
         calls = []
         def native(command, **kwargs):
             calls.append(command)
@@ -148,9 +150,12 @@ class SuitePartitionTest(unittest.TestCase):
                                        ['--filter', 'FutureTest::test_one'])):
             with self.subTest(env=env), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
+                (root / 'ci').mkdir()
+                (root / 'ci/deferred-tests.json').write_text('{}')
                 calls = []
                 def native(command, **kwargs):
                     calls.append(command)
+                    (root / 'evidence/candidate-junit.xml').write_text('<testsuites><testsuite><testcase classname="FutureTest" name="test_one" assertions="2"/></testsuite></testsuites>')
                     return subprocess.CompletedProcess(command, 0, 'OK (1 test, 2 assertions)\n')
                 with patch.object(M.subprocess, 'run', side_effect=native), contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(M.main(root, env), 0)

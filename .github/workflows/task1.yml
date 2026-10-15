@@ -17,7 +17,7 @@ jobs:
         fetch-depth: 0
     - name: Check 1
       id: resolve
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nset -euo pipefail\nfor patch in 19 18 17 16 15 14 13; do\n  image=\"mariadb:10.11.$patch\"\n  if docker manifest inspect \"$image\" >/dev/null 2>&1; then\n    echo \"image=$image\" >> \"$GITHUB_OUTPUT\"\n    echo \"Selected $image; CI reference 10.11.19\"\n    exit 0\n  fi\ndone\necho \"No verified MariaDB image near 10.11.19\" >&2\nexit 1\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nset -euo pipefail\nfor patch in 19; do\n  image=\"mariadb:10.11.$patch\"\n  if docker manifest inspect \"$image\" >/dev/null 2>&1; then\n    echo \"image=$image\" >> \"$GITHUB_OUTPUT\"\n    echo \"Selected $image; CI reference 10.11.19\"\n    exit 0\n  fi\ndone\necho \"No verified MariaDB image near 10.11.19\" >&2\nexit 1\nCI_COMMAND\n"
     - name: Publish bounded summary
       if: always()
       run: python3 scripts/safe-summary.py
@@ -127,6 +127,14 @@ jobs:
         composer install --no-scripts --no-plugins --no-interaction --prefer-dist
 
         composer validate --strict
+
+        CI_COMMAND
+
+        '
+    - name: Check outcome controls
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        python3 scripts/verify-test-result-controls.py
 
         CI_COMMAND
 
@@ -588,6 +596,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
     - name: Check 4
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -755,6 +773,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
     - name: Check 4
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -913,6 +941,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
     - name: Check 4
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -1038,9 +1076,21 @@ jobs:
   push:
     branches:
     - main
+    paths-ignore:
+    - docs/**
+    - README
+    - README.*
+    - '**/README'
+    - '**/README.*'
   pull_request:
     branches:
     - main
+    paths-ignore:
+    - docs/**
+    - README
+    - README.*
+    - '**/README'
+    - '**/README.*'
   workflow_dispatch:
     inputs:
       scope:
@@ -1057,4 +1107,4 @@ jobs:
         required: false
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true

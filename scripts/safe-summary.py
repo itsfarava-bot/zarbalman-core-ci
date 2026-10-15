@@ -94,8 +94,13 @@ def collect(root):
                     lines = lines[1:]
                 failures.append({'name': safe_test_name(identity, root), 'location': location,
                                  'message': message('\n'.join(lines))})
+    outcome = root / 'evidence/test-result-control.json'
+    control = json.loads(outcome.read_text()) if outcome.exists() else {}
+    pending = int(control.get('pending', 0)) if control.get('exit_code') == 0 else 0
+    if not 0 <= pending <= 5:
+        raise ValueError('Invalid pending count')
     return {'job': safe_job_name(os.environ.get('GITHUB_JOB', 'local'), root),
-            'counts': counts, 'failures': failures,
+            'counts': counts, 'failures': failures, 'pending': pending,
             'checks': [{'check': int(r['check']), 'exit_code': int(r['exit_code']),
                         'duration_seconds': round(float(r.get('duration_seconds', 0)), 2)} for r in runs]}
 
@@ -109,6 +114,11 @@ def render(data):
               '| Failed test | File:line | First message line |', '|---|---|---|']
     for issue in data['failures']:
         lines.append('| ' + ' | '.join(issue[key] for key in ('name', 'location', 'message')) + ' |')
+    pending = int(data.get('pending', 0))
+    if not 0 <= pending <= 5:
+        raise ValueError('Invalid pending count')
+    if pending:
+        lines += ['', 'Pending failures retained: ' + str(pending) + ' (two-way outcome guard).']
     if data.get('unavailable'):
         lines += ['', 'Summary unavailable: [redacted]']
     return '\n'.join(lines) + '\n'

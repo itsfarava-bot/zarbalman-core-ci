@@ -9,7 +9,11 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ci_test_results import check
 
 ROOT = Path(__file__).resolve().parents[1]
 SECURITY_CLASSES = ('FinanceDestinationTest', 'EndpointSecurityTest')
@@ -156,6 +160,7 @@ def main(root=ROOT, environment=None):
         command += ['--filter', focused_filter]
     # Create an empty, fresh marker after native discovery and before execution.
     (evidence / 'http-matrix-run-start').write_bytes(b'')
+    (evidence / 'candidate-junit.xml').unlink(missing_ok=True)
     result = subprocess.run(command, cwd=root, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     (evidence / 'candidate-phpunit.txt').write_text(result.stdout)
@@ -164,7 +169,15 @@ def main(root=ROOT, environment=None):
     for summary in summaries:
         print(summary)
     print('PHPUnit exit_code=' + str(result.returncode))
-    return result.returncode
+    try:
+        deferred = json.loads((root / 'ci/deferred-tests.json').read_text())
+        guarded = check(evidence / 'candidate-junit.xml', result.returncode, deferred,
+                        require_all=partition in ('all', 'main') and not focused_filter)
+    except (OSError, ValueError, TypeError):
+        guarded = {'exit_code': 1, 'errors': ['invalid_pending_list']}
+    (evidence / 'test-result-control.json').write_text(json.dumps(guarded, sort_keys=True) + '\n')
+    print('Outcome control ' + json.dumps(guarded, sort_keys=True))
+    return guarded['exit_code']
 
 
 if __name__ == '__main__':
