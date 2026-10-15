@@ -56,6 +56,24 @@ def message(value):
     return first[:160] if first in SAFE_MESSAGES else '[redacted]'
 
 
+
+def safe_location(value, root):
+    if not isinstance(value, str) or len(value) > 240:
+        return '[redacted]'
+    match = re.fullmatch(r'(tests/[A-Za-z0-9_./\-]+\.php):([1-9][0-9]{0,5})', value)
+    if not match:
+        return '[redacted]'
+    path, line = match.groups()
+    target = (root / path).resolve()
+    tests = (root / 'tests').resolve()
+    if not target.is_relative_to(tests) or not target.is_file():
+        return '[redacted]'
+    canonical = target.relative_to(root.resolve()).as_posix()
+    if path != canonical or int(line) > len(target.read_text().splitlines()):
+        return '[redacted]'
+    return canonical + ':' + str(int(line))
+
+
 def collect(root):
     runtime = root / '.runtime'
     source = runtime / 'public-summary.json'
@@ -84,9 +102,9 @@ def collect(root):
                 body = issue.text or ''
                 location = '[redacted]'
                 for path, line in re.findall(r'(tests/[A-Za-z0-9_./\-]+\.php):(\d+)\s*$', body, re.M):
-                    target = (root / path).resolve()
-                    if target.is_relative_to((root / 'tests').resolve()) and target.is_file():
-                        location = path + ':' + line
+                    candidate = safe_location(path + ':' + line, root)
+                    if candidate != '[redacted]':
+                        location = candidate
                         break
                 identity = case.get('classname', '') + '::' + case.get('name', '')
                 lines = body.strip().splitlines()
@@ -154,8 +172,7 @@ def publish(args):
             data['checks'] = [{'check': int(row['check']), 'exit_code': int(row['exit_code']), 'duration_seconds': round(float(row['duration_seconds']), 2)} for row in data['checks']]
             for issue in data['failures']:
                 issue['name'] = safe_test_name(issue['name'], args.root)
-                if not re.fullmatch(r'tests/[A-Za-z0-9_./\-]+\.php:\d+', issue['location']) or '..' in issue['location']:
-                    issue['location'] = '[redacted]'
+                issue['location'] = safe_location(issue['location'], args.root)
                 issue['message'] = message(issue['message'])
             text += render(data) + '\n'
     else:

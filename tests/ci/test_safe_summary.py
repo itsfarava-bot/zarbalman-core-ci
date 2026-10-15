@@ -18,7 +18,7 @@ class SafeSummaryTest(unittest.TestCase):
             (root / '.runtime/check-1.log').write_text(log)
             (root / '.runtime/public-summary.json').write_text(json.dumps({'runs': [{'check': 1, 'exit_code': 1, 'duration_seconds': 2.5}]}))
             (root / 'tests').mkdir()
-            (root / 'tests/SyntheticTest.php').write_text('<?php final class SyntheticTest { public function test_safe(): void {} }')
+            (root / 'tests/SyntheticTest.php').write_text('<?php\n\nfinal class SyntheticTest {\n\n public function test_safe(): void {\n }\n}\n')
             (root / '.github/workflows').mkdir(parents=True)
             (root / '.github/workflows/task1.yml').write_text('jobs:\n  synthetic:\n    runs-on: ubuntu-24.04\n')
             if junit:
@@ -82,6 +82,18 @@ secret@example.invalid token=synthetic-only-secret</failure></testcase></testsui
         xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_sk_live_private"><failure>Failed asserting that false is true.</failure></testcase></testsuite></testsuites>'
         summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
         self.assertEqual('[redacted]', data['failures'][0]['name'])
+
+    def test_diagnostic_paths_and_line_numbers_cannot_publish_payloads(self):
+        for location in ['tests/SYNTHETIC_PRIVATE_VALUE/../SyntheticTest.php:2',
+                         'tests/SyntheticTest.php:09120000000', 'tests/SyntheticTest.php:999999',
+                         'tests//SyntheticTest.php:2', 'tests/./SyntheticTest.php:2']:
+            with self.subTest(location=location):
+                xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe"><failure>Failed asserting that false is true.\n' + location + '</failure></testcase></testsuite></testsuites>'
+                summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
+                self.assertEqual('[redacted]', data['failures'][0]['location'])
+                self.assertNotIn(location, summary)
+                self.assertNotIn('SYNTHETIC_PRIVATE_VALUE', summary)
+                self.assertNotIn('09120000000', summary)
 
     def test_malformed_junit_publishes_fixed_unavailable_summary_without_trace(self):
         summary, data = self.run_summary('raw synthetic secret', '<testsuites>', expected_exit=1)
