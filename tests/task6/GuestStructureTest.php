@@ -49,6 +49,10 @@ final class GuestStructureTest extends TestCase {
             $http = CandidateHttp::post($group['path'], ['action' => $group['action'], '_zbm_guest_structure' => '1',
                 'request_id' => (string) $fixture->id, 'order_id' => (string) $fixture->orderId, 'operation' => 'flow_note'], '');
             $after = $this->snapshot();
+            file_put_contents(__DIR__ . '/../../evidence/guest-response-debug.json', wp_json_encode([
+                'http' => $http['status'], 'scope_header' => Task4EndpointHttp::header($http, 'X-Zbm-Guest-Scope') !== '',
+                'json_response' => str_contains(Task4EndpointHttp::header($http, 'Content-Type'), 'json'),
+            ], JSON_THROW_ON_ERROR));
             self::assertSame('native-dispatcher-wp-die', Task4EndpointHttp::header($http, 'X-Zbm-Guest-Scope'));
             self::assertSame($group['guest'], Task4EndpointHttp::header($http, 'X-Zbm-Guest-Hook'));
             self::assertSame('0', Task4EndpointHttp::header($http, 'X-Zbm-Guest-Hook-Present'), 'Private action must have no guest callback: ' . $hook);
