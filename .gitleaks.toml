@@ -6,3 +6,14 @@ condition = "AND"
 paths = ['''(^|/)source-sha256\.json$''']
 regexTarget = "line"
 regexes = ['''^\s*"[^"\r\n]+": "[a-f0-9]{64}",?\s*$''']
+
+# One deliberately fabricated negative-control value, created for summary tests.
+# Both the exact extracted value and the exact fixture path must match.
+[[rules]]
+id = "stripe-access-token"
+  [[rules.allowlists]]
+  description = "Exact fabricated summary negative control only"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''(^|/)tests/ci/test_safe_summary\.py$''']
+  regexes = ['''^sk_live_abCdEfGhiJkl$''']

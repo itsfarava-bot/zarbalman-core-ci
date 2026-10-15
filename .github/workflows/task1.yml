@@ -3,6 +3,7 @@ permissions:
   contents: read
 env:
   TZ: Asia/Tehran
+  PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   database-image:
     needs: secret-scan
