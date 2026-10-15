@@ -4,12 +4,20 @@ require_once __DIR__ . '/../support/CandidateFixture.php';
 require_once __DIR__ . '/../support/HttpClient.php';
 require_once __DIR__ . '/../support/Task4EndpointHttp.php';
 require_once __DIR__ . '/../support/Task4EndpointFixture.php';
+require_once __DIR__ . '/../support/Task5NativeAdminBootstrap.php';
 use PHPUnit\Framework\TestCase;
 use Zarbalman\Core\Infrastructure\{Schema, WorkflowStore, ProtectedText, DeliveryDataCrypto};
 use Zarbalman\Core\Application\ManualPaymentSettings;
 use Zarbalman\Core\Integration\{DokanVendorEligibility, ZarinpalBalanceAdapter};
 
 final class AdditionalEndpointsTest extends TestCase {
+    private array $adminBootstrap = [];
+
+    protected function setUp(): void {
+        parent::setUp();
+        $this->adminBootstrap = Task5NativeAdminBootstrap::prime();
+        self::assertSame(200, $this->adminBootstrap['final_http'], 'Native admin bootstrap must precede isolated endpoint fixtures.');
+    }
     public static function setUpBeforeClass(): void {
         parent::setUpBeforeClass();
         $names = ['evidence-download-legacy-and-managed', 'manual-settings-and-online-control',
@@ -28,7 +36,7 @@ final class AdditionalEndpointsTest extends TestCase {
         $file = __DIR__ . '/../../evidence/task4-additional-http.json';
         $rows = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
         if (!is_array($rows)) { $rows = []; }
-        try { $detail = $test(); $rows[$name] = ['status' => 'passed', 'detail' => $detail]; }
+        try { $detail = $test(); $detail['admin_bootstrap'] = $this->adminBootstrap; $rows[$name] = ['status' => 'passed', 'detail' => $detail]; }
         catch (Throwable $error) {
             $rows[$name] = ['status' => 'failed', 'reason' => $error->getMessage()];
             file_put_contents($file, wp_json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
