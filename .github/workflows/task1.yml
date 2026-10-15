@@ -17,6 +17,16 @@ jobs:
     - name: Check 1
       id: resolve
       run: "python3 scripts/public-run.py <<'CI_COMMAND'\nset -euo pipefail\nfor patch in 19 18 17 16 15 14 13; do\n  image=\"mariadb:10.11.$patch\"\n  if docker manifest inspect \"$image\" >/dev/null 2>&1; then\n    echo \"image=$image\" >> \"$GITHUB_OUTPUT\"\n    echo \"Selected $image; CI reference 10.11.19\"\n    exit 0\n  fi\ndone\necho \"No verified MariaDB image near 10.11.19\" >&2\nexit 1\nCI_COMMAND\n"
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -67,6 +77,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -114,6 +134,16 @@ jobs:
       with:
         name: composer-lock
         path: composer.lock
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
         if-no-files-found: error
         retention-days: 7
     - name: Seal diagnostics
@@ -221,6 +251,16 @@ jobs:
     - name: Check 6
       if: always()
       run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\nwp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -325,6 +365,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -407,6 +457,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -440,6 +500,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -591,6 +661,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -737,6 +817,16 @@ jobs:
       with:
         name: summary-task4-fast-diagnosis
         path: .runtime/public-summary.json
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
         if-no-files-found: error
         retention-days: 7
     - name: Seal diagnostics
@@ -887,6 +977,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -904,6 +1004,35 @@ jobs:
       ZBM_TEST_SCOPE: full
     timeout-minutes: 60
     if: needs.dependencies.outputs.scope == 'full'
+  run-summary:
+    needs:
+    - database-image
+    - secret-scan
+    - dependencies
+    - smoke
+    - static-analysis
+    - standards-security
+    - style-report
+    - candidate-regressions
+    - task4-fast-diagnosis
+    - security-regressions
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        persist-credentials: false
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: safe-summary-*
+        path: .runtime/summaries
+    - name: Summarize run
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: python3 scripts/safe-summary.py --aggregate .runtime/summaries
 'on':
   push:
     branches:

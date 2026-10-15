@@ -5,6 +5,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 
 root = pathlib.Path(__file__).resolve().parents[1]
 runtime = root / '.runtime'
@@ -14,6 +15,7 @@ summary = json.loads(summary_path.read_text()) if summary_path.exists() else {'r
 command = sys.stdin.read()
 number = len(summary['runs']) + 1
 log = runtime / ('check-' + str(number) + '.log')
+started = time.monotonic()
 with log.open('wb') as output:
     os.chmod(log, 0o600)
     result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command], cwd=root, stdout=output, stderr=subprocess.STDOUT)
@@ -29,7 +31,8 @@ patterns = [
 lines = []
 for pattern in patterns:
     lines.extend(re.findall(pattern, text))
-entry = {'check': number, 'exit_code': result.returncode, 'summary': lines}
+entry = {'check': number, 'exit_code': result.returncode, 'summary': lines,
+         'duration_seconds': round(time.monotonic() - started, 2)}
 summary['runs'].append(entry)
 summary_path.write_text(json.dumps(summary, indent=2) + '\n')
 print('Check', number, 'exit_code=', result.returncode)
