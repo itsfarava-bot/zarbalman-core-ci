@@ -68,7 +68,7 @@ final class LegacyRequestFormControlsTest extends TestCase {
         }
         self::assertSame(200, Task4EndpointHttp::get('wp-admin/index.php', [], $cookie)['status']);
     }
-    private function fixture(string $mode = 'test_pending', string $state = 'supplier_accepted'): array {
+    private function fixture(string $mode = 'test_pending', string $state = 'supplier_accepted', ?int $buyer = null): array {
         global $wpdb; $vendor = $this->user('vendor_1');
         $product = Task4RemainingFixture::product($vendor, 'Synthetic historical request product');
         $start = (new DateTimeImmutable('today', wp_timezone()))->modify('+5 days')->setTime(12, 0)->setTimezone(new DateTimeZone('UTC'));
@@ -85,7 +85,7 @@ final class LegacyRequestFormControlsTest extends TestCase {
         self::assertSame(0, (int) $count); self::assertTrue(RequestNumber::isValid($number));
         // Legacy pricing1:1000 product total/100 deposit; canonical validated pickup window and encrypted delivery facts.
         [$request, $repos] = CandidateFixture::request(['request_number' => $number, 'product_id' => $product->get_id(),
-            'vendor_id' => $vendor, 'execution_mode' => $mode, 'current_state' => $state, 'pricing_version' => 1,
+            'buyer_id' => $buyer ?? $this->user('buyer_1'), 'vendor_id' => $vendor, 'execution_mode' => $mode, 'current_state' => $state, 'pricing_version' => 1,
             'delivery_start_gmt' => $window->startGmt(), 'delivery_end_gmt' => $window->endGmt(),
             'delivery_payload_encrypted' => $crypto->encrypt($input->deliveryPayload())]);
         self::assertSame(1000, $request->estimatedTotalToman()); self::assertSame(100, $request->depositToman());
@@ -347,7 +347,12 @@ final class LegacyRequestFormControlsTest extends TestCase {
 
     public function test_rendered_late_cancel_preserves_valid_issued_online_identity_before_verification(): void {
         global $wpdb; $schema = new Schema($wpdb);
-        [$request, $repos, $product] = $this->fixture('live', 'late_payment_review');
+        $existingEmails = $wpdb->get_results($wpdb->prepare('SELECT ID,user_email FROM %i ORDER BY ID', $wpdb->users), ARRAY_A);
+        self::assertSame('', $wpdb->last_error); self::assertNotEmpty($existingEmails);
+        $buyer = wp_insert_user(['user_login' => 'task6_phone_' . wp_generate_uuid4(), 'user_pass' => wp_generate_password(32), 'user_email' => '', 'role' => 'customer']);
+        self::assertIsInt($buyer); self::assertGreaterThan(0, $buyer); self::assertSame('', get_userdata($buyer)->user_email);
+        [$request, $repos, $product] = $this->fixture('live', 'late_payment_review', $buyer);
+        self::assertSame($buyer, $request->buyerId());
         // Historical canonical online order with an issued Authority, without any captured money or successful verification.
         $order = wc_create_order(['customer_id' => $request->buyerId(), 'status' => 'pending']); $order->set_currency('IRT');
         $order->set_created_via('zarbalman-core-spec3'); $order->set_payment_method('WC_ZPal');
@@ -365,6 +370,9 @@ final class LegacyRequestFormControlsTest extends TestCase {
         $request = $repos['requests']->find($request->id()); self::assertNotNull($request);
         $persisted = wc_get_order($order->get_id());
         $this->diagnose('historical_online_fixture', ['staged' => $this->snapshotDiagnostic($order, $request), 'persisted' => $persisted instanceof WC_Order ? $this->snapshotDiagnostic($persisted, $request) : null]);
+        self::assertInstanceOf(WC_Order::class, $persisted);
+        self::assertTrue(ManagedOrderSnapshot::matches($persisted, $request));
+        self::assertSame('', $persisted->get_billing_email('edit'));
         self::assertTrue(ManagedOrderSnapshot::matches($order, $request));
         $payments = new PaymentRepository($wpdb); self::assertTrue($payments->prepareExpectedDeposit($request, $order->get_id()));
         $payment = $payments->findExpectedByOrder($order->get_id()); self::assertIsArray($payment);
@@ -385,6 +393,8 @@ final class LegacyRequestFormControlsTest extends TestCase {
         $before = Task4ManagedFixture::snapshot(); $http = CandidateHttp::post('wp-admin/admin-post.php', $fields, $cookie);
         $message = 'لغو امن انجام نشد؛ وجود پرداخت قطعی یا وضعیت موجودی/سفارش باید بررسی شود.';
         $notice = $this->notice($http, $message, 'error'); $after = Task4ManagedFixture::snapshot(); self::assertSame($before, $after);
+        $currentEmails = $wpdb->get_results($wpdb->prepare('SELECT ID,user_email FROM %i WHERE ID<>%d ORDER BY ID', $wpdb->users, $buyer), ARRAY_A);
+        self::assertSame('', $wpdb->last_error); self::assertSame($existingEmails, $currentEmails, 'Existing customer emails must remain unchanged.');
         $fresh = $repos['requests']->find($request->id()); self::assertSame('late_payment_review', $fresh->state()); self::assertSame(0, $fresh->version()); self::assertSame($payment, $payments->findExpectedByOrder($order->get_id()));
         $this->record('http-014', 'authorized_identity_safety_control', __METHOD__, ['type' => 'validation', 'http' => $http['status'], 'actor' => 'admin',
             'actor_valid' => true, 'nonce_valid' => true, 'stored_binding_valid' => true, 'persisted_assertions' => true,
