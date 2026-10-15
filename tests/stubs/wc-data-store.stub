@@ -1,0 +1,11 @@
+<?php
+/**
+ * Static signatures for WooCommerce's native WC_Data_Store::__call proxy.
+ * Target: WooCommerce 10.9.4 OrdersTableDataStore and WC_Order_Data_Store_CPT.
+ * Runtime contract: DependencyDoubleBackedTest::test_native_hpos_stock_flag_survives_reload_and_reset.
+ * This file is consumed only by PHPStan and never loaded by WordPress.
+ *
+ * @method bool get_stock_reduced(int|WC_Order $order)
+ * @method void set_stock_reduced(int|WC_Order $order, bool $set)
+ */
+class WC_Data_Store {}

@@ -6,6 +6,8 @@ parameters:
     paths:
         - plugin
     tmpDir: .runtime/phpstan
+    stubFiles:
+        - tests/stubs/wc-data-store.stub
     bootstrapFiles:
         - ci/phpstan-bootstrap.php
     scanFiles:

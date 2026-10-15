@@ -99,6 +99,9 @@ final class DependencyDoubleBackedTest extends TestCase {
         self::assertTrue(\Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled());
         self::assertSame('no', get_option('woocommerce_custom_orders_table_data_sync_enabled'));
         $order = wc_create_order(['status' => 'pending']); self::assertInstanceOf(WC_Order::class, $order);
+        self::assertInstanceOf(WC_Data_Store::class, $order->get_data_store());
+        self::assertTrue($order->get_data_store()->has_callable('get_stock_reduced'));
+        self::assertTrue($order->get_data_store()->has_callable('set_stock_reduced'));
         $adapter = (new ReflectionClass(\Zarbalman\Core\Integration\WooCommerceOrderAdapter::class))->newInstanceWithoutConstructor();
         $set = new ReflectionMethod($adapter, 'setOrderStockReduced');
         $get = new ReflectionMethod($adapter, 'orderStockReduced');
