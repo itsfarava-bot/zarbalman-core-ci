@@ -365,13 +365,17 @@ final class LegacyRequestFormControlsTest extends TestCase {
         $item = new WC_Order_Item_Product(); $item->set_product($product); $item->set_quantity(1); $item->set_subtotal('1000'); $item->set_total('100');
         foreach (['_zbm_package_price_toman' => 1000, '_zbm_nominal_package_weight_tenths' => 10, '_zbm_reference_weight_tenths' => 10] as $key => $value) { $item->update_meta_data($key, $value); }
         (new YithDepositAdapter())->decorate($order, $item, $request->pricingSnapshot(), 1); $order->add_item($item); $order->set_total('100');
-        $authority = 'TASK4-' . str_replace('-', '', wp_generate_uuid4()); $order->update_meta_data('_zarinpal_authority', $authority); $order->save();
+        $authority = 'TASK4-' . str_replace('-', '', wp_generate_uuid4()); $order->update_meta_data('_zarinpal_authority', $authority);
+        // Build the historical snapshot through the same order-scoped write as production; all guards stay registered.
+        $creator = $this->registeredCreator(); $save = new ReflectionMethod($creator, 'withInternalSnapshotChange');
+        self::assertSame($order->get_id(), $save->invoke($creator, $order->get_id(), static fn(): int => $order->save()));
         self::assertSame(1, $wpdb->update($schema->purchase_requests_table(), ['wc_order_id' => $order->get_id(), 'payment_ready' => 1], ['id' => $request->id()]));
         $request = $repos['requests']->find($request->id()); self::assertNotNull($request);
         $persisted = wc_get_order($order->get_id());
         $this->diagnose('historical_online_fixture', ['staged' => $this->snapshotDiagnostic($order, $request), 'persisted' => $persisted instanceof WC_Order ? $this->snapshotDiagnostic($persisted, $request) : null]);
         self::assertInstanceOf(WC_Order::class, $persisted);
         self::assertTrue(ManagedOrderSnapshot::matches($persisted, $request));
+        foreach ($persisted->get_items('line_item') as $persistedItem) { self::assertGreaterThan(0, $persistedItem->get_id()); }
         self::assertSame('', $persisted->get_billing_email('edit'));
         self::assertTrue(ManagedOrderSnapshot::matches($order, $request));
         $payments = new PaymentRepository($wpdb); self::assertTrue($payments->prepareExpectedDeposit($request, $order->get_id()));
