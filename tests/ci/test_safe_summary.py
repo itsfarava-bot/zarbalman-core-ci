@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class SafeSummaryTest(unittest.TestCase):
-    def run_summary(self, log, junit=''):
+    def run_summary(self, log, junit='', expected_exit=0):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / '.runtime').mkdir()
@@ -18,14 +18,17 @@ class SafeSummaryTest(unittest.TestCase):
             (root / '.runtime/check-1.log').write_text(log)
             (root / '.runtime/public-summary.json').write_text(json.dumps({'runs': [{'check': 1, 'exit_code': 1, 'duration_seconds': 2.5}]}))
             (root / 'tests').mkdir()
-            (root / 'tests/SyntheticTest.php').write_text('<?php')
+            (root / 'tests/SyntheticTest.php').write_text('<?php final class SyntheticTest { public function test_safe(): void {} }')
+            (root / '.github/workflows').mkdir(parents=True)
+            (root / '.github/workflows/task1.yml').write_text('jobs:\n  synthetic:\n    runs-on: ubuntu-24.04\n')
             if junit:
                 (root / 'evidence/candidate-junit.xml').write_text(junit)
             summary = root / 'summary.md'
             result = subprocess.run(['python3', str(ROOT / 'scripts/safe-summary.py'), '--root', str(root)],
                                     env={**os.environ, 'GITHUB_STEP_SUMMARY': str(summary), 'GITHUB_JOB': 'synthetic'},
                                     capture_output=True, text=True)
-            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertNotIn('Traceback', result.stderr)
+            self.assertEqual(expected_exit, result.returncode, result.stderr)
             return summary.read_text(), json.loads((root / '.runtime/safe-summary.json').read_text())
 
     def test_publish_only_safe_failure_metadata(self):
@@ -57,6 +60,34 @@ secret@example.invalid token=synthetic-only-secret</failure></testcase></testsui
         self.assertNotIn('do-not-publish', summary)
         self.assertEqual(2, data['counts']['tests'])
         self.assertEqual([], data['failures'])
+
+    def test_dataset_cannot_publish_contact_number_or_identifier(self):
+        xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe with data set &quot;09120000000&quot;"><failure>Failed asserting that false is true.</failure></testcase></testsuite></testsuites>'
+        summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
+        self.assertNotIn('09120000000', summary)
+        self.assertEqual('[redacted]', data['failures'][0]['name'])
+
+    def test_native_junit_header_is_not_the_failure_message(self):
+        xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe"><failure>SyntheticTest::test_safe(synthetic-private-value)\nFailed asserting that false is true.\n/runner/tests/SyntheticTest.php:7</failure></testcase></testsuite></testsuites>'
+        summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
+        self.assertEqual('Failed asserting that false is true.', data['failures'][0]['message'])
+        self.assertNotIn('synthetic-private-value', summary)
+
+    def test_unverified_dataset_values_and_fake_method_names_are_redacted(self):
+        for label in ['customer-Alice-Smith', 'sk_live_abCdEfGhiJkl', '123.45 USD']:
+            xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe with data set &quot;' + label + '&quot;"><failure>Failed asserting that false is true.</failure></testcase></testsuite></testsuites>'
+            summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
+            self.assertNotIn(label, summary)
+            self.assertEqual('[redacted]', data['failures'][0]['name'])
+        xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_sk_live_private"><failure>Failed asserting that false is true.</failure></testcase></testsuite></testsuites>'
+        summary, data = self.run_summary('Tests: 1, Assertions: 1, Failures: 1.', xml)
+        self.assertEqual('[redacted]', data['failures'][0]['name'])
+
+    def test_malformed_junit_publishes_fixed_unavailable_summary_without_trace(self):
+        summary, data = self.run_summary('raw synthetic secret', '<testsuites>', expected_exit=1)
+        self.assertTrue(data['unavailable'])
+        self.assertIn('[redacted]', summary)
+        self.assertIsNone(data['counts']['tests'])
 
 
 if __name__ == '__main__':
