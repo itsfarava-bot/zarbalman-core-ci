@@ -758,6 +758,49 @@ def apply_supplemental_overlay(row, gaps, supplemental, junit):
     return apply_payment_overlay(row, gaps, supplemental, junit)
 
 
+
+GUEST_TEST = 'GuestStructureTest::test_private_dispatchers_have_no_guest_hook_and_preserve_state'
+GUEST_SNAPSHOT_SUFFIXES = (
+    'zbm_workflows', 'zbm_audit_logs', 'zbm_idempotency_keys', 'zbm_order_weights',
+    'zbm_purchase_requests', 'zbm_payments', 'zbm_ledger_entries', 'zbm_financial_actions',
+    'zbm_notification_outbox', 'zbm_dokan_credit_mirrors', 'zbm_managed_cases', 'zbm_managed_case_commands',
+    'posts', 'postmeta', 'woocommerce_order_items', 'woocommerce_order_itemmeta',
+    'wc_orders', 'wc_order_addresses', 'wc_order_operational_data', 'wc_orders_meta',
+    'dokan_vendor_balance', 'dokan_orders', 'users', 'usermeta', 'protected_options',
+)
+
+
+def guest_structure_control(row, proof, junit):
+    target = row.get('target', {})
+    hook = target.get('hook', '')
+    match = re.fullmatch(r'(admin_post_|wp_ajax_)(?!nopriv_)([a-z][a-z0-9_]{0,99})', hook)
+    if target.get('kind') != 'action' or not match or not isinstance(proof, dict):
+        return False
+    guest_hook = match[1] + 'nopriv_' + match[2]
+    path = 'wp-admin/' + ('admin-post.php' if match[1] == 'admin_post_' else 'admin-ajax.php')
+    if not (proof.get('state') == proof.get('assertion_status') == 'passed'
+            and proof.get('actual_http') is True and proof.get('test') == GUEST_TEST
+            and row['id'] in proof.get('catalog_ids', []) and junit_pass(junit, GUEST_TEST)
+            and proof.get('scope') == 'native-dispatcher-wp-die'
+            and proof.get('protected_hook') == hook and proof.get('guest_hook') == guest_hook
+            and proof.get('guest_hook_registered') is False and proof.get('empty_cookie') is True
+            and type(proof.get('guest_actor_id')) is int and proof['guest_actor_id'] == 0
+            and type(proof.get('http')) is int and proof['http'] == 400 and proof.get('path') == path):
+        return False
+    before, after = proof.get('before_snapshot'), proof.get('after_snapshot')
+    prefix = proof.get('table_prefix')
+    return (isinstance(prefix, str) and re.fullmatch(r'[A-Za-z0-9_]{1,64}', prefix) is not None
+            and snapshot_valid(before) and snapshot_valid(after) and before == after
+            and all(prefix + suffix in before for suffix in GUEST_SNAPSHOT_SUFFIXES))
+
+
+def apply_guest_overlay(row, gaps, records, junit):
+    if not guest_structure_control(row, records.get(row['id']), junit):
+        return gaps
+    return [gap for gap in gaps if not ((gap.startswith('negative:') or ':negative:' in gap)
+                                       and re.search(r'[:/]guest$', gap))]
+
+
 def evaluate(catalog, registration, remaining, additional, managed, junit, supplemental=None):
     supplemental = supplemental or {}
     output = []
@@ -790,9 +833,12 @@ def evaluate(catalog, registration, remaining, additional, managed, junit, suppl
             else: gaps.append('unknown-contract')
         gaps, supplemental_na, positive_kind = apply_supplemental_overlay(row, gaps, supplemental, junit)
         not_applicable.update(supplemental_na)
+        guest_records = supplemental.get('http-guest-structure.json', {})
+        gaps = apply_guest_overlay(row, gaps, guest_records, junit)
         positive_gaps = [gap for gap in gaps if gap.startswith(('positive:', 'positive-and-negative-controls:', 'junit')) or ':positive-control' in gap or gap == 'scenario-incomplete']
         negative_gaps = [gap for gap in gaps if gap.startswith(('negative:', 'positive-and-negative-controls:', 'junit')) or ':negative:' in gap or gap == 'scenario-incomplete']
         output.append({'id': row['id'], 'kind': row['kind'], 'registered': runtime.get('registered') is True,
+                       'guest_structural_control_complete': guest_structure_control(row, guest_records.get(row['id']), junit),
                        'registration_control_complete': not any(gap.startswith('registration') for gap in gaps),
                        'positive_control_complete': not positive_gaps,
                        'supplemental_positive_kind': None if positive_kind == 'actual-form-identity-safety-denial' else positive_kind,
@@ -843,7 +889,9 @@ def main():
             report['errors'].append('managed-operation-inventory-not-proved')
         loaded = [json.loads(path.read_text()) for path in paths[1:]]
         supplemental = {}
-        for name in sorted({binding['file'] for row in catalog['rows'] for binding in row.get('supplemental', [])}):
+        supplemental_names = {binding['file'] for row in catalog['rows'] for binding in row.get('supplemental', [])}
+        supplemental_names.add('http-guest-structure.json')
+        for name in sorted(supplemental_names):
             path = evidence / name
             data, error = load_supplemental(path, started)
             if error:

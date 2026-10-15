@@ -34,6 +34,7 @@ final class HttpSurfaceRegistry {
             $routes = rest_get_server()->get_routes();
             foreach ($routes[$target['route']] ?? [] as $endpoint) {
                 if (is_array($endpoint) && !empty($endpoint['methods'][$target['method']])
+                    && is_callable($endpoint['permission_callback'] ?? null)
                     && self::callbackMatches($endpoint['callback'] ?? null, $target)) { return true; }
             }
             return false;

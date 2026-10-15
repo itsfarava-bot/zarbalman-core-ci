@@ -32,6 +32,7 @@
       <file>tests/task6/ZarinpalResponseContractTest.php</file>
       <file>tests/task6/DokanAmountContractTest.php</file>
       <file>tests/task4/HttpRiskControlsTest.php</file>
+      <file>tests/task6/GuestStructureTest.php</file>
     </testsuite>
   </testsuites>
 </phpunit>
