@@ -19,7 +19,7 @@
   "src/Admin/SiteHealth.php": "dc2547b5f9663368f6d088e598ab8f54496019d64815724107281ccf47c29c11",
   "src/Admin/Spec3Settings.php": "dbab35fb4c46a507ccdaee081b6f37156128ccca3ff9003acc5897be034ab036",
   "src/Admin/Spec4FinancePage.php": "c2ca89c4cdf5a0e14aedd2613e32c640f5c3a6c36d3c87fd346b11f1c4b82a8f",
-  "src/Application/AdminTestAdvanceService.php": "f407dd9df1db76b89b1b7d803409ff7a882d3876bb8784d5862aa9de9041a6c0",
+  "src/Application/AdminTestAdvanceService.php": "9364eae67c8ce2aaf9667c413c7a4a8410da4820f008b6537c914eb9524f4bf3",
   "src/Application/AdminTestModeManager.php": "6bf6591e91efe635811a7866d9e7e5379851a1aedb1365813ba3cca0c5fc312f",
   "src/Application/BalancePaymentService.php": "747591fdd4c21d9b5038640cf445f7642f7387179d270fd2a2836a573d028d1b",
   "src/Application/DepositPaymentService.php": "b0b2ef4b1d83d1cb3b4775ccdd01c605a272c72eba6c1ac3f7b213f6f611d34e",

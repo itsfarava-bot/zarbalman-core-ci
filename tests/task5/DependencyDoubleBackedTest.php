@@ -271,6 +271,7 @@ final class DependencyDoubleBackedTest extends TestCase {
             'expected_fail_closed' => true, 'observed_fail_closed' => $closed,
             'effect' => $closed ? 'Native recovery denied without mutation.' : 'Native recovery observation did not satisfy the dependency contract.'], $closed ? 'passed' : 'failed');
         self::assertSame(302, $http['status']); self::assertSame($emails, $this->emailFingerprint()); self::assertSame([], $this->doubles->calls());
+        self::assertSame($facts['test_managed_error']['message'], $notice['message']);
         self::assertTrue($closed, 'Unavailable dependencies must preserve the pending request, stock and order identity. Observed notice=' . ($notice['type'] ?? '[missing]') . ', state=' . $fresh->state() . ', order=' . ($fresh->wcOrderId() ?? 0));
     }
     private function productStockRows(int $productId): array {
@@ -349,6 +350,7 @@ final class DependencyDoubleBackedTest extends TestCase {
         self::assertSame($initialStockRows, $stockRows);
         $freshProduct = wc_get_product($product->get_id()); self::assertInstanceOf(WC_Product::class, $freshProduct);
         self::assertFalse($freshProduct->managing_stock()); self::assertFalse($freshProduct->is_virtual()); self::assertNull($freshProduct->get_stock_quantity());
+        self::assertSame($facts['test_managed_error']['message'], $notice['message']);
         self::assertTrue($closed, 'Unavailable dependencies must preserve the pending request, stock and order identity. Observed notice=' . ($notice['type'] ?? '[missing]') . ', state=' . $fresh->state() . ', order=' . ($fresh->wcOrderId() ?? 0));
     }
 }
