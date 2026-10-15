@@ -1,4 +1,4 @@
 {
-  "scope": "focused",
-  "filter": "GuestStructureTest"
+  "scope": "full",
+  "filter": ""
 }
