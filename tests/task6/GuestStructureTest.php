@@ -39,20 +39,26 @@ final class GuestStructureTest extends TestCase {
         }
         self::assertNotEmpty($groups);
         $fixture = new Task4ManagedFixture('flow_note');
-        // Complete Dokan's one-time fresh-install admin redirect before measuring
+        // Complete WooCommerce/Dokan fresh-install admin redirects before measuring
         // guest requests. Use a real authenticated request to an absent callback;
         // keep every production hook and guard registered.
         $warmupAction = 'zbm_task6_unregistered_warmup';
         self::assertFalse(has_action('admin_post_' . $warmupAction));
         [$adminCookie] = CandidateHttp::auth($fixture->users['admin'], 'unused-guest-fixture-warmup');
-        $warmup = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $warmupAction], $adminCookie);
-        if ($warmup['status'] === 302) {
-            self::assertSame(add_query_arg(['page' => 'dokan-setup'], admin_url('index.php')),
-                Task4EndpointHttp::header($warmup, 'Location'));
-        } else {
-            self::assertSame(400, $warmup['status']);
+        $setupRedirects = array_fill_keys([
+            add_query_arg(['page' => 'wc-admin'], admin_url('admin.php')),
+            add_query_arg(['page' => 'dokan-setup'], admin_url('index.php')),
+        ], true);
+        for ($attempt = 0; $attempt < 3; ++$attempt) {
+            $warmup = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $warmupAction], $adminCookie);
+            if ($warmup['status'] !== 302) {
+                self::assertSame(400, $warmup['status']);
+                break;
+            }
+            $location = Task4EndpointHttp::header($warmup, 'Location');
+            self::assertArrayHasKey($location, $setupRedirects, 'Only one-time local setup redirects are allowed.');
+            unset($setupRedirects[$location]);
         }
-        $warmup = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $warmupAction], $adminCookie);
         self::assertSame(400, $warmup['status'], 'Disposable admin initialization must finish before the guest measurements.');
         wp_set_current_user(0); unset($_COOKIE[LOGGED_IN_COOKIE]);
         $records = ['_meta' => ['schema_version' => 1, 'run_id' => getenv('GITHUB_RUN_ID') ?: 'local',
