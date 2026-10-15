@@ -142,7 +142,7 @@
   "src/Integration/ManualPaymentRouteGuard.php": "cbf66089feed38dbf6c4f5d9d4e90d8b8261a3180f8dd532946b5db0c2cf9b28",
   "src/Integration/PwSmsAdapter.php": "c44875fb7f6469d1ee9cad578568694b2d74a2d7fccf0eaed02a4a1404d81f60",
   "src/Integration/SecureZarinpalVerifier.php": "b43ee113528643be08e73d02f26a5af562e61e42496c536901d15287f6ec0c0c",
-  "src/Integration/WooCommerceOrderAdapter.php": "a115e7bf506122245d187408d212b443c13d3f2c2591a3d4ba10eececbd3bd2f",
+  "src/Integration/WooCommerceOrderAdapter.php": "2020541c19209e3a83fab132ef457cd69f5c167037ee89169b70c020c2d2ca25",
   "src/Integration/YithDepositAdapter.php": "70fcb477e1a06eda0b33f2b26458780feb68da84d62914a2675b190fa68824e3",
   "src/Integration/ZarinpalAdapter.php": "008603ecb544bd6c66e191625e939bf9c98ffb251544bf824ad822058c362336",
   "src/Integration/ZarinpalBalanceAdapter.php": "0059500a5265b3c496ef27c9bf5536257e0aa4075c709f3b0da432ee6ea9c6de",
