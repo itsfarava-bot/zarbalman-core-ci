@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "test_double_backed_missing_yith_native_legacy_recovery"
+  "filter": "ZarinpalResponseContractTest|FinancialDoubleBackedTest"
 }

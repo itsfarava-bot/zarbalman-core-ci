@@ -73,6 +73,7 @@ add_action('plugins_loaded', static function () use ($task5Config): void {
         if (!$record['merchant_is_synthetic']) { return new WP_Error('zbm_task5_double_merchant_mismatch', 'Synthetic transport accepts only the owned synthetic merchant.'); }
         if (!$bindingMatches) { return new WP_Error('zbm_task5_double_binding_mismatch', 'Synthetic provider request did not match the expected binding.'); }
         if (!is_array($reply)) { return new WP_Error('zbm_task5_double_response_missing', 'No synthetic response was configured.'); }
+        if (($reply['transport_error'] ?? '') === 'timeout') { return new WP_Error('http_request_failed', 'cURL error 28: Synthetic verification timeout.'); }
         return ['headers' => [], 'body' => (string) $reply['body'], 'response' => ['code' => (int) $reply['status'], 'message' => 'Task 5 synthetic response'], 'cookies' => [], 'filename' => null];
     }, PHP_INT_MAX, 3);
 }, 2);

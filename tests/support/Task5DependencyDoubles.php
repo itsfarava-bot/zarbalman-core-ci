@@ -71,6 +71,7 @@ final class Task5DependencyDoubles {
             if (!in_array($path, ['request.json', 'verify.json'], true) || !is_array($reply)
                 || !is_int($reply['status'] ?? null) || !is_string($reply['body'] ?? null)
                 || isset($reply['expected_body']) && !is_array($reply['expected_body'])) { throw new InvalidArgumentException('Unsupported synthetic response.'); }
+            if (isset($reply['transport_error']) && $reply['transport_error'] !== 'timeout') { throw new InvalidArgumentException('Unsupported synthetic transport error.'); }
         }
         $config = array_intersect_key($config, array_flip(['yith', 'gateway', 'supporting', 'responses', 'callback_probe_order_id', 'callback_barrier_count']));
         $config['support_root'] = __DIR__;

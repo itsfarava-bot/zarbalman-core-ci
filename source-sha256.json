@@ -146,7 +146,7 @@
   "src/Integration/YithDepositAdapter.php": "70fcb477e1a06eda0b33f2b26458780feb68da84d62914a2675b190fa68824e3",
   "src/Integration/ZarinpalAdapter.php": "008603ecb544bd6c66e191625e939bf9c98ffb251544bf824ad822058c362336",
   "src/Integration/ZarinpalBalanceAdapter.php": "0059500a5265b3c496ef27c9bf5536257e0aa4075c709f3b0da432ee6ea9c6de",
-  "src/Integration/ZarinpalVerificationResponse.php": "8d4700f052506bea53ccac73874d266a2e5cc0483f8a0dc1acf2c2dda58ce6bc",
+  "src/Integration/ZarinpalVerificationResponse.php": "a207a18a46069c345e0fbfdacbd4890145839ebb11aa3b56d5065051260f9b2b",
   "src/Notification/MessageCatalog.php": "f768e921553a0187cc1fb63ea71e2c2c0abb44a5dd0444ea74151f4872c8a860",
   "src/Notification/RecipientResolver.php": "8a4295d8767bf2f933b47960201cec2561dc3cb455abc564f29a7a01f2b70072",
   "src/Plugin.php": "6388cbf4117350a4d03f5031d9d81b09424c47a20d405e86da49e59d4c555711",

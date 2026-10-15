@@ -294,6 +294,29 @@ final class FinancialDoubleBackedTest extends TestCase {
             'provider_payload_compatibility_proved' => false, 'http_status' => 400, 'financial' => $facts]);
     }
 
+    public function test_uncertain_transport_and_provider_results_keep_receipt_and_exact_amount_without_cash(): void {
+        $doubles = $this->install();
+        foreach (['timeout', 'server_error', 'temporary_data_code', 'unknown_data_code'] as $mode) {
+            $fixture = new Task5FinancialFixture();
+            $reply = ['status' => $mode === 'server_error' ? 500 : 200,
+                'body' => wp_json_encode(['data' => ['code' => $mode === 'temporary_data_code' ? -52 : -999], 'errors' => []], JSON_THROW_ON_ERROR),
+                'expected_body' => ['amount' => 1000, 'authority' => $fixture->authority,
+                    'merchant_id' => 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL']];
+            if ($mode === 'timeout') { $reply['transport_error'] = 'timeout'; }
+            $before = count(self::verifyCalls($doubles));
+            $doubles->configure(['supporting' => true, 'callback_probe_order_id' => $fixture->orderId,
+                'responses' => ['verify.json' => $reply]]);
+            self::assertSame(503, $this->performObservedCallback('uncertain-' . $mode, $fixture, $doubles)['status']);
+            $facts = $fixture->assertNoCash();
+            self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
+            self::assertSame('deposit_pending', $facts['state']);
+            $calls = self::verifyCalls($doubles); self::assertCount($before + 1, $calls);
+            self::assertSame(1000, $calls[$before]['amount']); self::assertTrue($calls[$before]['expected_binding_matches']);
+            Task5FinancialFixture::evidence('uncertain-' . $mode, ['double_backed' => true, 'http_status' => 503,
+                'receipt_retained' => true, 'exact_rial_amount' => true, 'no_cash' => true]);
+        }
+    }
+
     public function test_provider_cancelled_return_produces_no_cash_or_verification(): void {
         $doubles = $this->install();
         $cancelled = new Task5FinancialFixture(); $cancelled->configure($doubles); $before = $cancelled->facts(); $callsBefore = count($doubles->calls());
