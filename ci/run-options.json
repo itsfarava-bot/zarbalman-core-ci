@@ -1,4 +1,4 @@
 {
-  "scope": "focused",
-  "filter": "AdditionalEndpointsTest::test_private_legacy_and_managed_downloads_have_real_binary_positives_and_exact_denials|AdditionalEndpointsTest::test_manual_settings_and_online_stop_require_finance_nonce_and_commit_audit"
+  "scope": "full",
+  "filter": ""
 }
