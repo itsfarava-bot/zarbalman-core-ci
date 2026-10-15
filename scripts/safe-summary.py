@@ -57,6 +57,29 @@ def message(value):
 
 
 
+
+MAX_JOB_BYTES = 256 * 1024
+MAX_AGGREGATE_BYTES = 900000
+MAX_FAILURE_ROWS = 1000
+MAX_CHECK_ROWS = 128
+TRUNCATED = 'Summary truncated; detailed diagnostics remain encrypted.'
+
+
+def bounded(lines, limit, truncated=False):
+    output, used = [], 0
+    reserve = len(('\n' + TRUNCATED + '\n').encode())
+    for line in lines:
+        size = len((line + '\n').encode())
+        if used + size > limit - reserve:
+            truncated = True
+            break
+        output.append(line)
+        used += size
+    if truncated:
+        output += ['', TRUNCATED]
+    return '\n'.join(output) + '\n'
+
+
 def safe_location(value, root):
     if not isinstance(value, str) or len(value) > 240:
         return '[redacted]'
@@ -93,12 +116,16 @@ def collect(root):
                     if key.lower() in counts:
                         counts[key.lower()] += int(number)
     failures = []
+    truncated = len(runs) > MAX_CHECK_ROWS
     junit = root / 'evidence/candidate-junit.xml'
     if junit.exists():
         for case in ET.parse(junit).iter('testcase'):
             for issue in list(case):
                 if issue.tag not in ('failure', 'error'):
                     continue
+                if len(failures) >= MAX_FAILURE_ROWS:
+                    truncated = True
+                    break
                 body = issue.text or ''
                 location = '[redacted]'
                 for path, line in re.findall(r'(tests/[A-Za-z0-9_./\-]+\.php):(\d+)\s*$', body, re.M):
@@ -118,19 +145,20 @@ def collect(root):
     if not 0 <= pending <= 5:
         raise ValueError('Invalid pending count')
     return {'job': safe_job_name(os.environ.get('GITHUB_JOB', 'local'), root),
-            'counts': counts, 'failures': failures, 'pending': pending,
+            'counts': counts, 'failures': failures, 'pending': pending, 'truncated': truncated,
             'checks': [{'check': int(r['check']), 'exit_code': int(r['exit_code']),
-                        'duration_seconds': round(float(r.get('duration_seconds', 0)), 2)} for r in runs]}
+                        'duration_seconds': round(float(r.get('duration_seconds', 0)), 2)} for r in runs[:MAX_CHECK_ROWS]]}
 
 
 def render(data):
     lines = ['| Job | Check | Result | Seconds |', '|---|---:|---|---:|']
-    for check in data['checks']:
+    truncated = bool(data.get('truncated')) or len(data['checks']) > MAX_CHECK_ROWS or len(data['failures']) > MAX_FAILURE_ROWS
+    for check in data['checks'][:MAX_CHECK_ROWS]:
         lines.append(f"| {data['job']} | {check['check']} | {'success' if check['exit_code'] == 0 else 'failure'} | {check['duration_seconds']} |")
     lines += ['', '| Tests | Assertions | Failures | Errors | Skip | Risky | Incomplete |', '|---:|---:|---:|---:|---:|---:|---:|',
               '| ' + ' | '.join(str(data['counts'][key]) if data['counts'][key] is not None else 'unknown' for key in COUNTERS) + ' |', '',
               '| Failed test | File:line | First message line |', '|---|---|---|']
-    for issue in data['failures']:
+    for issue in data['failures'][:MAX_FAILURE_ROWS]:
         lines.append('| ' + ' | '.join(issue[key] for key in ('name', 'location', 'message')) + ' |')
     pending = int(data.get('pending', 0))
     if not 0 <= pending <= 5:
@@ -139,7 +167,7 @@ def render(data):
         lines += ['', 'Pending failures retained: ' + str(pending) + ' (two-way outcome guard).']
     if data.get('unavailable'):
         lines += ['', 'Summary unavailable: [redacted]']
-    return '\n'.join(lines) + '\n'
+    return bounded(lines, MAX_JOB_BYTES, truncated)
 
 
 def publish(args):
@@ -154,7 +182,7 @@ def publish(args):
         with urllib.request.urlopen(request, timeout=30) as response:
             jobs = json.load(response)['jobs']
         lines = ['| Job | Result | Seconds |', '|---|---|---:|']
-        for job in jobs:
+        for job in jobs[:128]:
             seconds = 0
             if job.get('started_at') and job.get('completed_at'):
                 seconds = int((datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00')) - datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))).total_seconds())
@@ -162,19 +190,26 @@ def publish(args):
             if result not in ('success', 'failure', 'cancelled', 'skipped', 'neutral', 'timed_out', 'action_required', 'stale', 'queued', 'in_progress', 'completed', 'pending', 'waiting', 'requested'):
                 result = '[redacted]'
             lines.append(f"| {safe_job_name(job['name'], args.root)} | {result} | {seconds} |")
-        text = '\n'.join(lines) + '\n\n'
-        for path in sorted(args.aggregate.rglob('safe-summary.json')):
+        text = bounded(lines, MAX_AGGREGATE_BYTES, len(jobs) > 128) + '\n'
+        paths = sorted(args.aggregate.rglob('safe-summary.json'))
+        for path in paths[:128]:
             # Revalidate metadata and messages at the publication boundary.
             data = json.loads(path.read_text())
             data['job'] = safe_job_name(data['job'], args.root)
             unavailable = unavailable or data.get('unavailable', False)
             data['counts'] = {key: None if data.get('unavailable') else max(0, int(data['counts'][key])) for key in COUNTERS}
-            data['checks'] = [{'check': int(row['check']), 'exit_code': int(row['exit_code']), 'duration_seconds': round(float(row['duration_seconds']), 2)} for row in data['checks']]
-            for issue in data['failures']:
+            data['truncated'] = bool(data.get('truncated')) or len(data['checks']) > MAX_CHECK_ROWS or len(data['failures']) > MAX_FAILURE_ROWS
+            data['checks'] = [{'check': int(row['check']), 'exit_code': int(row['exit_code']), 'duration_seconds': round(float(row['duration_seconds']), 2)} for row in data['checks'][:MAX_CHECK_ROWS]]
+            for issue in data['failures'][:MAX_FAILURE_ROWS]:
                 issue['name'] = safe_test_name(issue['name'], args.root)
                 issue['location'] = safe_location(issue['location'], args.root)
                 issue['message'] = message(issue['message'])
             text += render(data) + '\n'
+            if len(text.encode()) > MAX_AGGREGATE_BYTES:
+                text = bounded(text.splitlines(), MAX_AGGREGATE_BYTES, True)
+                break
+        if len(paths) > 128:
+            text = bounded(text.splitlines(), MAX_AGGREGATE_BYTES, True)
     else:
         data = collect(args.root)
         (args.root / '.runtime/safe-summary.json').write_text(json.dumps(data, indent=2) + '\n')
