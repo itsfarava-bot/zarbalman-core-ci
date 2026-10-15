@@ -94,6 +94,27 @@ final class DependencyDoubleBackedTest extends TestCase {
             'effect' => 'Native health fails gateway-only scopes while preserving the nonfinancial test/manual scope.']);
     }
 
+    public function test_native_hpos_stock_flag_survives_reload_and_reset(): void {
+        global $wpdb;
+        self::assertTrue(\Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled());
+        self::assertSame('no', get_option('woocommerce_custom_orders_table_data_sync_enabled'));
+        $order = wc_create_order(['status' => 'pending']); self::assertInstanceOf(WC_Order::class, $order);
+        $adapter = (new ReflectionClass(\Zarbalman\Core\Integration\WooCommerceOrderAdapter::class))->newInstanceWithoutConstructor();
+        $set = new ReflectionMethod($adapter, 'setOrderStockReduced');
+        $get = new ReflectionMethod($adapter, 'orderStockReduced');
+        foreach ([true, false, true] as $reduced) {
+            $set->invoke($adapter, $order, $reduced);
+            // SQL is the persistence oracle, independent of every order cache.
+            $stored = $wpdb->get_var($wpdb->prepare('SELECT order_stock_reduced FROM %i WHERE order_id=%d',
+                $wpdb->prefix . 'wc_order_operational_data', $order->get_id()));
+            self::assertSame('', $wpdb->last_error); self::assertNotNull($stored);
+            self::assertSame($reduced ? '1' : '0', $stored);
+            $fresh = new WC_Order($order->get_id());
+            self::assertSame($reduced, $fresh->get_order_stock_reduced());
+            self::assertSame($reduced, $get->invoke($adapter, $fresh));
+        }
+    }
+
     /** Creates a separate legal phone-only customer; existing account emails are never changed. */
     private function request(string $mode, bool $trackStock = true): array {
         global $wpdb;
