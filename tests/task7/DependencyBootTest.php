@@ -56,6 +56,25 @@ final class DependencyBootTest extends TestCase {
 
     public static function yithModes(): array { return ['YITH present double' => [true], 'YITH absent' => [false]]; }
 
+    public function test_isolated_missing_native_dokan_with_commercial_presence_doubles(): void {
+        $doubles = Task5DependencyDoubles::install(['supporting' => true]);
+        try {
+            $before = Task7DependencyHarness::snapshot();
+            $facts = Task7DependencyHarness::boot('missing_dokan');
+            self::assertSame($before, Task7DependencyHarness::snapshot());
+            self::assertTrue($facts['woocommerce_loaded']); self::assertTrue($facts['scheduler_loaded']);
+            self::assertFalse($facts['dokan_loaded']);
+            self::assertSame(['dokan_lite'], array_keys(array_filter($facts['health'], static fn(bool $ok): bool => !$ok)),
+                'An unrelated missing dependency must not satisfy the isolated Dokan denial.');
+            self::assertTrue($facts['mutation_attempted']);
+            self::assertSame('zbm_request_dependencies_unavailable', $facts['mutation_error']);
+            self::assertNotFalse(file_put_contents(__DIR__ . '/../../evidence/task7-isolated-dokan.json',
+                wp_json_encode(['dependency_mode' => 'double-backed', 'commercial_compatibility_proved' => false,
+                    'native_dokan_excluded' => true, 'only_failed_dependency' => 'dokan_lite',
+                    'business_snapshot_unchanged' => true, 'real_provider_called' => false], JSON_THROW_ON_ERROR)));
+        } finally { $doubles->restore(); wp_set_current_user(0); }
+    }
+
     /** @dataProvider yithModes */
     public function test_double_backed_yith_presence_does_not_gate_actual_http_request_creation(bool $yith): void {
         global $wpdb;
@@ -105,8 +124,9 @@ final class DependencyBootTest extends TestCase {
     private function actor(string $role): int {
         $login = 'task7_dependency_' . str_replace('-', '', wp_generate_uuid4());
         $id = wp_insert_user(['user_login' => $login, 'user_pass' => wp_generate_password(32, true, true),
-            'user_email' => $login . '@example.invalid', 'role' => $role]);
+            'role' => $role]);
         self::assertFalse(is_wp_error($id)); self::assertGreaterThan(0, $id);
+        self::assertSame('', get_userdata($id)->user_email);
         update_user_meta($id, 'billing_phone', '09120000000');
         return (int) $id;
     }
