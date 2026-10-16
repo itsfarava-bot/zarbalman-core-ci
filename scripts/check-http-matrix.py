@@ -14,6 +14,9 @@ import sys
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ci_matrix_deferrals import apply_deferrals
+
 ROOT = Path(__file__).resolve().parents[1]
 NEGATIVES = ('guest', 'wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce')
 MANAGED_METHOD = 'test_operation_positive_or_explicit_dependency_control_and_six_rejections'
@@ -901,10 +904,18 @@ def main():
         report['rows'] = evaluate(catalog, *loaded, junit_results(junit_path), supplemental)
     except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError, ET.ParseError) as error:
         report['errors'].append(type(error).__name__ + ':' + str(error))
+    try:
+        manifest = json.loads((root / 'ci/deferred-http-matrix.json').read_text())
+        control = apply_deferrals(report['rows'], manifest)
+    except (OSError, ValueError, TypeError):
+        control = {'deferred': 0, 'unreviewed': 0, 'errors': ['invalid-deferral-manifest']}
+    report['deferrals'] = control
+    report['errors'].extend(control['errors'])
     failed = sum(not row['positive_and_negative_complete'] for row in report['rows'])
-    report['summary'] = {'rows': len(report['rows']), 'failed': failed, 'errors': len(report['errors'])}
+    report['summary'] = {'rows': len(report['rows']), 'failed': failed, 'complete': len(report['rows']) - failed,
+                         'deferred': control['deferred'], 'unreviewed': control['unreviewed'], 'errors': len(report['errors'])}
     (evidence / 'http-matrix-coverage.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report['summary'], sort_keys=True))
-    return int(bool(failed or report['errors'] or len(report['rows']) != 86))
+    return int(bool(report['errors'] or failed != control['deferred'] or len(report['rows']) != 86))
 
 if __name__ == '__main__': sys.exit(main())

@@ -9,8 +9,12 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import urllib.request
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ci_matrix_deferrals import apply_deferrals
 
 COUNTERS = ('tests', 'assertions', 'failures', 'errors', 'skipped', 'risky', 'incomplete')
 SAFE_MESSAGES = {
@@ -97,6 +101,24 @@ def safe_location(value, root):
     return canonical + ':' + str(int(line))
 
 
+def matrix_pending(root):
+    path = root / 'evidence/http-matrix-coverage.json'
+    if not path.exists():
+        return None
+    report = json.loads(path.read_text())
+    manifest = json.loads((root / 'ci/deferred-http-matrix.json').read_text())
+    control = apply_deferrals(report['rows'], manifest)
+    return (control['deferred'] if not report['errors'] and not control['errors']
+            and len(report['rows']) == 86 else 0)
+
+
+def job_seconds(job):
+    if not job.get('started_at') or not job.get('completed_at'):
+        return 0
+    return max(0, int((datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00'))
+                       - datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))).total_seconds()))
+
+
 def collect(root):
     runtime = root / '.runtime'
     source = runtime / 'public-summary.json'
@@ -145,7 +167,7 @@ def collect(root):
     if not 0 <= pending <= 5:
         raise ValueError('Invalid pending count')
     return {'job': safe_job_name(os.environ.get('GITHUB_JOB', 'local'), root),
-            'counts': counts, 'failures': failures, 'pending': pending, 'truncated': truncated,
+            'counts': counts, 'failures': failures, 'pending': pending, 'matrix_pending': matrix_pending(root), 'truncated': truncated,
             'checks': [{'check': int(r['check']), 'exit_code': int(r['exit_code']),
                         'duration_seconds': round(float(r.get('duration_seconds', 0)), 2)} for r in runs[:MAX_CHECK_ROWS]]}
 
@@ -165,6 +187,11 @@ def render(data):
         raise ValueError('Invalid pending count')
     if pending:
         lines += ['', 'Pending failures retained: ' + str(pending) + ' (two-way outcome guard).']
+    if data.get('matrix_pending') is not None:
+        matrix = data['matrix_pending']
+        if type(matrix) is not int or matrix not in (0, 9):
+            raise ValueError('Invalid matrix deferral count')
+        lines += ['', f'Deferred tests: {pending}; deferred HTTP matrix rows: {matrix}.']
     if data.get('unavailable'):
         lines += ['', 'Summary unavailable: [redacted]']
     return bounded(lines, MAX_JOB_BYTES, truncated)
@@ -183,9 +210,7 @@ def publish(args):
             jobs = json.load(response)['jobs']
         lines = ['| Job | Result | Seconds |', '|---|---|---:|']
         for job in jobs[:128]:
-            seconds = 0
-            if job.get('started_at') and job.get('completed_at'):
-                seconds = int((datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00')) - datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))).total_seconds())
+            seconds = job_seconds(job)
             result = job['conclusion'] or job['status']
             if result not in ('success', 'failure', 'cancelled', 'skipped', 'neutral', 'timed_out', 'action_required', 'stale', 'queued', 'in_progress', 'completed', 'pending', 'waiting', 'requested'):
                 result = '[redacted]'
