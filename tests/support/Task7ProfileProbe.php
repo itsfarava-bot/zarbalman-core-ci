@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // Read-only observations of production service results in the disposable runtime.
 if (PHP_SAPI !== 'cli') { exit(1); }
+require dirname(__DIR__, 2) . '/vendor/autoload.php';
 require getenv('ZBM_TEST_WP_ROOT') . '/wp-load.php';
 if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { exit(1); }
 require_once __DIR__ . '/Task5FinancialFixture.php';

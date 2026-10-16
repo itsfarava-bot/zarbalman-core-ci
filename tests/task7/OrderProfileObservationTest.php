@@ -61,6 +61,8 @@ final class OrderProfileObservationTest extends TestCase {
             self::assertSame(0, proc_close($process), 'The isolated native observation must finish normally.');
             self::assertSame('', $stderr, 'No native warning or fatal error is allowed.');
             $result = json_decode($output, true, 64, JSON_THROW_ON_ERROR);
+            self::assertNotSame('native_exception', $result['result_error'], 'Observation infrastructure must invoke the actual native service.');
+            self::assertNotEmpty($result['observations'], 'The route must reach the actual native managed-order save boundary.');
             self::assertTrue($result['native_service']); self::assertTrue($result['account_email_present']);
             self::assertTrue($result['mobile_preserved'], 'The observation must not alter buyer mobile data.');
             // Observation is deliberately outcome-neutral until product review.
