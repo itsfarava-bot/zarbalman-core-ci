@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ci_matrix_deferrals import apply_deferrals
+from task7_matrix_evidence import apply_task7_overlay
 
 ROOT = Path(__file__).resolve().parents[1]
 NEGATIVES = ('guest', 'wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce')
@@ -838,6 +839,12 @@ def evaluate(catalog, registration, remaining, additional, managed, junit, suppl
         not_applicable.update(supplemental_na)
         guest_records = supplemental.get('http-guest-structure.json', {})
         gaps = apply_guest_overlay(row, gaps, guest_records, junit)
+        gaps, task7_na, task7_kind = apply_task7_overlay(row, gaps,
+            supplemental.get('task7-matrix-double-backed.json', {}),
+            lambda test, dataset=None: junit_pass(junit, test, dataset))
+        not_applicable.update(task7_na)
+        if task7_kind is not None:
+            positive_kind = task7_kind
         positive_gaps = [gap for gap in gaps if gap.startswith(('positive:', 'positive-and-negative-controls:', 'junit')) or ':positive-control' in gap or gap == 'scenario-incomplete']
         negative_gaps = [gap for gap in gaps if gap.startswith(('negative:', 'positive-and-negative-controls:', 'junit')) or ':negative:' in gap or gap == 'scenario-incomplete']
         output.append({'id': row['id'], 'kind': row['kind'], 'registered': runtime.get('registered') is True,
@@ -845,7 +852,8 @@ def evaluate(catalog, registration, remaining, additional, managed, junit, suppl
                        'registration_control_complete': not any(gap.startswith('registration') for gap in gaps),
                        'positive_control_complete': not positive_gaps,
                        'supplemental_positive_kind': None if positive_kind == 'actual-form-identity-safety-denial' else positive_kind,
-                       'supplemental_safety_control_complete': positive_kind == 'actual-form-identity-safety-denial',
+                       'supplemental_safety_control_complete': positive_kind in ('actual-form-identity-safety-denial',
+                           'actual-http-double-backed-unissued-cancel-and-issued-identity-preservation'),
                        'negative_controls_complete': not negative_gaps,
                        'branch_coverage_complete': not any(gap.startswith('branch:') for gap in gaps),
                        'dependency_blocked_controls': [gap for gap in gaps if ':blocked-by-dependency:' in gap],
@@ -894,6 +902,7 @@ def main():
         supplemental = {}
         supplemental_names = {binding['file'] for row in catalog['rows'] for binding in row.get('supplemental', [])}
         supplemental_names.add('http-guest-structure.json')
+        supplemental_names.add('task7-matrix-double-backed.json')
         for name in sorted(supplemental_names):
             path = evidence / name
             data, error = load_supplemental(path, started)

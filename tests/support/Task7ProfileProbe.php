@@ -28,7 +28,7 @@ $observer = static function ($order) use ($request, &$observations): void {
 };
 add_action('woocommerce_after_order_object_save', $observer, PHP_INT_MAX);
 wp_set_current_user($request->buyerId());
-$error = null;
+$error = null; $exceptionClass = null;
 try {
     $admin = Task5FinancialFixture::registered('admin_post_zbm_admin_request_control', PurchaseRequestAdmin::class);
     if ($input['route'] === 'online') {
@@ -46,7 +46,7 @@ try {
             $request->version(), 'Synthetic profile observation', wp_generate_uuid4(), wp_generate_uuid4());
     } else { throw new RuntimeException('Unsupported route.'); }
     $error = is_wp_error($result) ? $result->get_error_code() : null;
-} catch (Throwable $failure) { $error = 'native_exception'; }
+} catch (Throwable $failure) { $error = 'native_exception'; $exceptionClass = get_class($failure); }
 finally { remove_action('woocommerce_after_order_object_save', $observer, PHP_INT_MAX); }
 $fresh = $repos['requests']->find($request->id());
 $order = $fresh->wcOrderId() ? wc_get_order($fresh->wcOrderId()) : null;
@@ -56,7 +56,8 @@ foreach (['payments_table', 'ledger_table', 'financial_actions_table'] as $metho
     if ($wpdb->last_error !== '') { throw new RuntimeException('Native count unavailable.'); }
 }
 echo json_encode(['route' => $input['route'], 'native_service' => true, 'http_boundary' => false,
-    'result_error' => $error, 'request_state' => $fresh->state(), 'order_created' => $order instanceof WC_Order,
+    'result_error' => $error, 'exception_class' => $exceptionClass,
+    'request_state' => $fresh->state(), 'order_created' => $order instanceof WC_Order,
     'account_email_present' => get_userdata($request->buyerId())->user_email !== '',
     'mobile_preserved' => get_user_meta($request->buyerId(), 'billing_phone', true) === $input['mobile'],
     'order_mobile_present' => $order instanceof WC_Order && $order->get_billing_phone('edit') !== '',

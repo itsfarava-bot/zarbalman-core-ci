@@ -15,6 +15,7 @@ final class DependencyBootTest extends TestCase {
             'Woo missing' => ['missing_woocommerce', 'woocommerce'],
             'Dokan missing' => ['missing_dokan', 'dokan_lite'],
             'Woo and its bundled AS absent (not AS-only)' => ['missing_woo_and_scheduler', 'action_scheduler'],
+            'native AS bootstrap unavailable while Woo remains active' => ['scheduler_bootstrap_unavailable', 'action_scheduler'],
             'native wrong currency' => ['broken_currency', 'currency'],
             'native wrong weight' => ['broken_weight', 'weight'],
             'native commercial YITH unavailable (other missing dependencies remain)' => ['native_yith_absent', 'yith'],
@@ -42,6 +43,10 @@ final class DependencyBootTest extends TestCase {
             self::assertSame($facts['request_error'], $facts['mutation_error']);
             if ($scenario === 'missing_dokan') { self::assertFalse($facts['dokan_loaded']); }
             if ($scenario === 'native_yith_absent') { self::assertFalse($facts['yith_loaded']); }
+            if ($scenario === 'scheduler_bootstrap_unavailable') {
+                self::assertTrue($facts['native_scheduler_bootstrap_removed']);
+                self::assertFalse($facts['scheduler_loaded']);
+            }
         }
         self::assertFalse(getenv('ZBM_TASK7_DEPENDENCY_SCENARIO'), 'Exclusion must be child-scoped.');
         self::assertTrue(class_exists('WooCommerce'));

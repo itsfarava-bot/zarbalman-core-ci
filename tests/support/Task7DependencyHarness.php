@@ -34,6 +34,13 @@ final class Task7DependencyHarness {
                 if (!$status['running']) { $exit = $status['exitcode']; break; }
                 usleep(10000);
             } while (microtime(true) < $deadline);
+            if ($exit !== 0) {
+                $evidence = __DIR__ . '/../../evidence';
+                foreach (['stdout', 'stderr'] as $stream) {
+                    file_put_contents($evidence . '/task7-dependency-' . $scenario . '-' . $stream . '.txt',
+                        (string) file_get_contents($directory . '/' . $stream), LOCK_EX);
+                }
+            }
             Assert::assertSame(0, $exit, 'Native dependency boot must finish normally; raw child logs are never emitted.');
             Assert::assertFileExists($directory . '/result.json');
             $facts = json_decode((string) file_get_contents($directory . '/result.json'), true, 32, JSON_THROW_ON_ERROR);

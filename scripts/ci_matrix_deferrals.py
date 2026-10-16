@@ -1,8 +1,8 @@
-"""Classify the nine reviewed HTTP rows without changing their evidence gaps."""
+"""Classify the four retained HTTP rows without changing their evidence gaps."""
 import re
 
 DEFERRED_IDS = frozenset('http-' + suffix for suffix in
-                         ('003', '004', '013', '014', '015', '020', '021', '042', '048'))
+                         ('003', '004', '015', '042'))
 
 
 def valid_gaps(value, allow_empty=False):

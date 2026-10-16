@@ -149,7 +149,8 @@ final class MatrixDoubleBackedTest extends TestCase {
             $after = Task4ManagedFixture::snapshot(); self::assertSame($before, $after);
             self::assertSame($emails, $this->emailFingerprint()); self::assertSame($calls, count($this->doubles->calls()));
             $controls[$scenario] = ['state' => 'passed', 'assertion_status' => 'passed', 'actual_http' => true,
-                'catalog_ids' => $ids, 'http' => $http['status'], 'actor' => $actor, 'before_snapshot' => $before, 'after_snapshot' => $after,
+                'catalog_ids' => $ids, 'http' => $http['status'], 'actor' => $actor,
+                'response_contract' => $actor === 'guest' ? 'guest-native-dispatcher' : ($actor !== 'admin' ? 'unauthorized' : (in_array($scenario, ['no_nonce', 'invalid_nonce'], true) ? 'wordpress-expired-link' : 'admin-notice')), 'before_snapshot' => $before, 'after_snapshot' => $after,
                 'notice' => $notice, 'snapshot_unchanged' => true, 'financial_unchanged' => true, 'provider_calls_added' => 0];
             $this->record($operation . ':negative:' . $scenario, ['test' => __CLASS__ . '::test_rendered_native_lifecycle_branch', 'branch' => $operation] + $controls[$scenario]);
         }
@@ -187,7 +188,12 @@ final class MatrixDoubleBackedTest extends TestCase {
             self::assertSame($fixture->orderId, $fresh->wcOrderId()); self::assertFalse($fresh->needsReconciliation());
             $schema = new Schema($wpdb); $payments = $this->rows($schema->payments_table(), 'request_id=%d', [$fixture->id]);
             self::assertCount(1, $payments); $ledger = $this->rows($schema->ledger_table(), 'request_id=%d', [$fixture->id]);
-            $effects = ['payment_status' => $payments[0]['status'], 'ledger_count' => count($ledger), 'order_status' => $fixture->order()->get_status()];
+            $effects = ['payment_status' => $payments[0]['status'], 'payment_count' => count($payments),
+                'paid_amount_toman' => $payments[0]['paid_amount_toman'] === null ? null : (int) $payments[0]['paid_amount_toman'],
+                'ledger_count' => count($ledger), 'order_status' => $fixture->order()->get_status(),
+                'order_id_matches' => $fixture->orderId === $fresh->wcOrderId(), 'reconciliation_required' => $fresh->needsReconciliation(),
+                'stock_reserved' => $fresh->stockReserved(), 'stock_released' => $fresh->stockReleased(),
+                'payment_ready' => $fresh->paymentReady(), 'provider_calls' => []];
             if ($operation === 'reopen_deposit') {
                 self::assertSame('deposit_pending', $fresh->state()); self::assertTrue($fresh->paymentReady());
                 self::assertTrue($fresh->stockReserved()); self::assertFalse($fresh->stockReleased());
@@ -195,6 +201,7 @@ final class MatrixDoubleBackedTest extends TestCase {
                 self::assertSame('pending', $fixture->order()->get_status()); self::assertSame('yes', $fixture->order()->get_meta('_zbm_payment_enabled', true));
                 $deadline = strtotime($fresh->depositDeadlineGmt() . ' UTC'); self::assertGreaterThanOrEqual($start + 86400, $deadline); self::assertLessThanOrEqual($end + 86400, $deadline);
                 self::assertSame(0, count($this->doubles->calls()) - $callsBefore);
+                $effects['deadline_in_window'] = $deadline >= $start + 86400 && $deadline <= $end + 86400;
                 $audit = $this->audit($fixture->id, 'deposit_deadline_reopen_requested', 'deposit_expired', 'deposit_pending');
             } elseif ($operation === 'accept_late') {
                 self::assertSame('deposit_paid', $fresh->state()); self::assertSame('late_accepted', $payments[0]['status']);
@@ -206,6 +213,12 @@ final class MatrixDoubleBackedTest extends TestCase {
                 $calls = array_slice($this->doubles->calls(), $callsBefore); self::assertCount(1, $calls);
                 self::assertSame('verify.json', $calls[0]['path']); self::assertSame(1000, $calls[0]['amount']); self::assertTrue($calls[0]['expected_binding_matches']); self::assertTrue($calls[0]['merchant_is_synthetic']);
                 $effects['ledger_amounts'] = $amounts; $effects['simulated_verification_calls'] = 1;
+                $effects['authority_matches'] = $fixture->authority === $payments[0]['authority'];
+                $effects['reference_matches'] = $fixture->reference === $payments[0]['reference'];
+                $effects['order_paid'] = $fixture->order()->is_paid();
+                $effects['transaction_matches'] = $fixture->reference === $fixture->order()->get_transaction_id();
+                $effects['provider_calls'] = array_map(static fn(array $call): array => array_intersect_key($call,
+                    array_flip(['path', 'amount', 'expected_binding_matches', 'merchant_is_synthetic'])), $calls);
                 $audit = $this->audit($fixture->id, 'late_deposit_accepted', 'late_payment_review', 'deposit_paid');
             } else {
                 self::assertSame('cancelled', $fresh->state()); self::assertTrue($fresh->stockReleased());
@@ -216,15 +229,19 @@ final class MatrixDoubleBackedTest extends TestCase {
             self::assertTrue(ManagedOrderSnapshot::matches($fixture->order(), $fresh));
             $after = Task4ManagedFixture::snapshot(); self::assertNotSame($before, $after);
             foreach ([$schema->financial_actions_table(), $schema->dokan_credit_mirrors_table()] as $table) { self::assertSame($before[$table], $after[$table]); }
+            $replayCalls = count($this->doubles->calls()); $replayEmails = $this->emailFingerprint();
             $replay = CandidateHttp::post('wp-admin/admin-post.php', $fields, $cookie);
             $replayMessage = match ($operation) { 'reopen_deposit' => 'این مهلت پرداخت قابل بازگشایی نیست.', 'accept_late' => 'این پرونده پرداخت دیرهنگام قابل پذیرش نیست.', default => 'درخواست، نسخه، دسترسی یا دلیل لغو معتبر نیست.' };
-            $this->notice($replay, 'error', $replayMessage); self::assertSame($after, Task4ManagedFixture::snapshot());
+            $replayNotice = $this->notice($replay, 'error', $replayMessage); $replaySnapshot = Task4ManagedFixture::snapshot(); self::assertSame($after, $replaySnapshot);
+            self::assertSame($replayCalls, count($this->doubles->calls())); self::assertSame($replayEmails, $this->emailFingerprint());
             $this->record($operation, ['test' => __METHOD__, 'dataset' => $operation, 'catalog_ids' => $ids, 'branch' => $operation,
                 'http' => 302, 'actor' => 'admin', 'nonce_valid' => true, 'actual_form_submitted' => true,
                 'request_id' => $fixture->id, 'order_id' => $fixture->orderId, 'before_state' => $request->state(), 'after_state' => $fresh->state(),
                 'before_version' => $version, 'after_version' => $fresh->version(), 'before_snapshot' => $before, 'after_snapshot' => $after,
                 'notice' => $notice, 'effects' => $effects, 'audit' => $audit, 'negative_controls' => $negative,
-                'snapshot_matches' => true, 'replay_preserved' => true, 'account_emails_unchanged' => true,
+                'snapshot_matches' => true, 'replay_preserved' => true, 'replay_http' => $replay['status'],
+                'replay_provider_calls_added' => count($this->doubles->calls()) - $replayCalls, 'replay_account_emails_unchanged' => $replayEmails === $this->emailFingerprint(),
+                'replay_notice' => $replayNotice, 'replay_snapshot' => $replaySnapshot, 'account_emails_unchanged' => true,
                 'historical_unissued_review_fixture' => $operation === 'cancel_review']);
         } catch (Throwable $error) {
             $this->record($operation, ['test' => __METHOD__, 'dataset' => $operation, 'catalog_ids' => $ids, 'branch' => $operation, 'failure_class' => get_class($error)], 'failed'); throw $error;
@@ -318,6 +335,13 @@ final class MatrixDoubleBackedTest extends TestCase {
                         $wpdb->prefix . 'wc_orders', $wpdb->prefix . 'wc_orders_meta', $wpdb->prefix . 'woocommerce_order_items', $wpdb->prefix . 'woocommerce_order_itemmeta'] as $table) { self::assertSame($before[$table], $after[$table]); }
                     $control += ['result' => 'allowed-own-scope-native-creation', 'request_id' => $created, 'stored_buyer_id' => $request->buyerId(),
                         'stored_vendor_id' => $request->vendorId(), 'forged_buyer_ignored' => true, 'forged_vendor_ignored' => true, 'financial_and_orders_unchanged' => true,
+                        'actor_user_id' => $this->user($actor), 'product_vendor_id' => $vendor, 'product_id' => $product->get_id(),
+                        'posted_buyer_id' => (int) $fields['buyer_id'], 'posted_vendor_id' => (int) $fields['vendor_id'],
+                        'requests_before_count' => count($requestsBefore), 'requests_after_count' => count($rows), 'existing_requests_unchanged' => true,
+                        'request_contract' => ['id' => $created, 'buyer_id' => $request->buyerId(), 'vendor_id' => $request->vendorId(),
+                            'product_id' => $request->productId(), 'state' => $request->state(), 'execution_mode' => $request->executionMode(),
+                            'version' => $request->version(), 'wc_order_id' => $request->wcOrderId(), 'stock_reserved' => $request->stockReserved(),
+                            'payments_count' => 0, 'ledger_count' => 0],
                         'role_contract' => 'Native source permits every logged-in actor to buy another vendor product; buyer is derived from the authenticated session.'];
                 } elseif ($scenario === 'guest') {
                     self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');

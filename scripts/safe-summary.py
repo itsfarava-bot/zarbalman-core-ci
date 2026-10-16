@@ -14,7 +14,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ci_matrix_deferrals import apply_deferrals
+from ci_matrix_deferrals import DEFERRED_IDS, apply_deferrals
 
 COUNTERS = ('tests', 'assertions', 'failures', 'errors', 'skipped', 'risky', 'incomplete')
 SAFE_MESSAGES = {
@@ -189,7 +189,7 @@ def render(data):
         lines += ['', 'Pending failures retained: ' + str(pending) + ' (two-way outcome guard).']
     if data.get('matrix_pending') is not None:
         matrix = data['matrix_pending']
-        if type(matrix) is not int or matrix not in (0, 9):
+        if type(matrix) is not int or matrix not in (0, len(DEFERRED_IDS)):
             raise ValueError('Invalid matrix deferral count')
         lines += ['', f'Deferred tests: {pending}; deferred HTTP matrix rows: {matrix}.']
     if data.get('unavailable'):

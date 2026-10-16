@@ -72,6 +72,9 @@ final class LifecycleTest extends TestCase {
         self::assertSame($beforeDeactivate, $afterDeactivate, 'Deactivation changed business rows.');
         self::assertSame($finance, $financeAfterDeactivate, 'Deactivation changed finance/WooCommerce.');
         self::assertFalse(as_has_scheduled_action($hook, [$id], Scheduler::GROUP));
+        foreach ([\Zarbalman\Core\Infrastructure\PurchaseRequestScheduler::RECOVERY_HOOK, \Zarbalman\Core\Infrastructure\NotificationWorker::HOOK] as $recurringHook) {
+            self::assertFalse(as_has_scheduled_action($recurringHook, [], Scheduler::GROUP), 'Deactivation must cancel native recovery and notification schedules.');
+        }
         // Persist an elapsed boundary while inactive, without changing the system clock.
         $elapsed = gmdate('Y-m-d H:i:s', time() - 60);
         self::assertSame(1, $wpdb->update($schema->workflows_table(), ['buyer_deadline_gmt' => $elapsed], ['order_id' => $id]));
@@ -131,6 +134,13 @@ final class LifecycleTest extends TestCase {
         $evidence['sweep_all_tables'] = Task5LifecycleSnapshot::tables($beforeSweep, $afterSweep);
         $evidence['sweep_financial_snapshot_changed_tables'] = Task5LifecycleSnapshot::hashes($financeExpected, $financeAfterSweep); $writeEvidence();
         self::assertTrue($result['registered']); self::assertTrue($result['scheduled']);
+        foreach ([\Zarbalman\Core\Infrastructure\PurchaseRequestScheduler::RECOVERY_HOOK, \Zarbalman\Core\Infrastructure\NotificationWorker::HOOK] as $recurringHook) {
+            $actions = as_get_scheduled_actions(['hook' => $recurringHook, 'args' => [], 'group' => Scheduler::GROUP,
+                'status' => ActionScheduler_Store::STATUS_PENDING, 'per_page' => 10], 'ids');
+            self::assertCount(1, $actions, 'The actual cold boot after activation must recreate exactly one native schedule.');
+            $schedule = ActionScheduler::store()->fetch_action((int) $actions[0])->get_schedule();
+            self::assertTrue($schedule->is_recurring()); self::assertSame(60, $schedule->get_recurrence());
+        }
         self::assertSame('admin_review', $store->snapshot($id)['state']); self::assertSame($before['version'] + 1, $store->snapshot($id)['version']);
         self::assertSame($financeExpected, $financeAfterSweep);
         $events = array_values(array_filter($repos['audit']->for_order($id, 20), static fn($event) => $event->event_key === 'workflow_transitioned' && $event->to_state === 'admin_review'));

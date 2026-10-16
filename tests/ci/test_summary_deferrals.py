@@ -18,7 +18,7 @@ class SummaryDeferralsTest(unittest.TestCase):
             root = Path(directory)
             self.assertIsNone(M.matrix_pending(root))
             (root / 'ci').mkdir(); (root / 'evidence').mkdir()
-            ids = ['http-' + n for n in ('003', '004', '013', '014', '015', '020', '021', '042', '048')]
+            ids = ['http-' + n for n in ('003', '004', '015', '042')]
             rows = [{'id': 'http-%03d' % n, 'gaps': ['positive:synthetic'] if 'http-%03d' % n in ids else [],
                      'positive_and_negative_complete': 'http-%03d' % n not in ids} for n in range(1, 87)]
             manifest = {key: {'gaps': ['positive:synthetic'], 'reason': 'Synthetic pending control.',
@@ -26,19 +26,22 @@ class SummaryDeferralsTest(unittest.TestCase):
             (root / 'ci/deferred-http-matrix.json').write_text(json.dumps(manifest))
             path = root / 'evidence/http-matrix-coverage.json'
             path.write_text(json.dumps({'rows': rows, 'errors': []}))
-            self.assertEqual(9, M.matrix_pending(root))
+            self.assertEqual(4, M.matrix_pending(root))
             path.write_text(json.dumps({'rows': rows, 'errors': ['stale-run-evidence']}))
             self.assertEqual(0, M.matrix_pending(root))
             rows[2].update(gaps=[], positive_and_negative_complete=True)
-            path.write_text(json.dumps({'rows': rows, 'errors': [], 'summary': {'deferred': 9}}))
+            path.write_text(json.dumps({'rows': rows, 'errors': [], 'summary': {'deferred': 4}}))
             self.assertEqual(0, M.matrix_pending(root), 'A claimed summary count must not override actual row gaps.')
             path.write_text(json.dumps({'rows': rows[:-1], 'errors': []}))
             self.assertEqual(0, M.matrix_pending(root))
 
     def test_both_pending_counts_are_visible_in_rendered_step_summary(self):
         data = {'job': 'candidate-regressions', 'counts': dict.fromkeys(M.COUNTERS, 0),
-                'checks': [], 'failures': [], 'pending': 5, 'matrix_pending': 9}
-        self.assertIn('Deferred tests: 5; deferred HTTP matrix rows: 9.', M.render(data))
+                'checks': [], 'failures': [], 'pending': 5, 'matrix_pending': 4}
+        self.assertIn('Deferred tests: 5; deferred HTTP matrix rows: 4.', M.render(data))
+        data['matrix_pending'] = 9
+        with self.assertRaises(ValueError):
+            M.render(data)
 
     def test_skipped_jobs_cannot_publish_negative_duration(self):
         self.assertTrue(hasattr(M, 'job_seconds'), 'Job durations must be normalized at publication.')

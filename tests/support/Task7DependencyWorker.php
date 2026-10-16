@@ -14,6 +14,7 @@ $facts = [
     'dokan_loaded' => function_exists('dokan_is_user_seller'),
     'yith_loaded' => class_exists('YITH_WCDP'),
     'scheduler_loaded' => function_exists('as_schedule_single_action') && function_exists('as_schedule_recurring_action'),
+    'native_scheduler_bootstrap_removed' => ($GLOBALS['task7_as_bootstrap_removed'] ?? false) === true,
     'business_hooks' => [],
     'missing_woo_notice' => has_action('admin_notices', [Zarbalman\Core\Plugin::class, 'render_dependency_notice']) !== false,
 ];
@@ -28,7 +29,7 @@ $facts['manual_error'] = $health->manualOrderError()?->get_error_code();
 $facts['deposit_error'] = $health->depositOrderError()?->get_error_code();
 $facts['mutation_attempted'] = false;
 $facts['mutation_error'] = null;
-if (in_array($scenario, ['missing_dokan', 'broken_currency', 'broken_weight', 'native_yith_absent'], true)) {
+if (in_array($scenario, ['missing_dokan', 'scheduler_bootstrap_unavailable', 'broken_currency', 'broken_weight', 'native_yith_absent'], true)) {
     $controllers = [];
     foreach (($GLOBALS['wp_filter']['admin_post_zbm_admin_request_control']->callbacks ?? []) as $callbacks) {
         foreach ($callbacks as $entry) {

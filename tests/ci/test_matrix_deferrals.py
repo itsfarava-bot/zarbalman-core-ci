@@ -5,8 +5,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-IDS = ('http-003', 'http-004', 'http-013', 'http-014', 'http-015',
-       'http-020', 'http-021', 'http-042', 'http-048')
+IDS = ('http-003', 'http-004', 'http-015', 'http-042')
 
 
 class MatrixDeferralsTest(unittest.TestCase):
@@ -23,11 +22,11 @@ class MatrixDeferralsTest(unittest.TestCase):
                               'reason': 'Synthetic evidence is not yet available.',
                               'required_environment': 'Disposable native HTTP fixture.'} for key in IDS}
 
-    def test_exact_nine_are_explicitly_pending_without_closing_any_gap(self):
+    def test_exact_four_are_explicitly_pending_without_closing_any_gap(self):
         before = copy.deepcopy(self.rows)
         result = self.module.apply_deferrals(self.rows, self.manifest)
         self.assertEqual([], result['errors'])
-        self.assertEqual(9, result['deferred'])
+        self.assertEqual(4, result['deferred'])
         self.assertEqual(0, result['unreviewed'])
         self.assertEqual(before, self.rows)
 
@@ -48,12 +47,19 @@ class MatrixDeferralsTest(unittest.TestCase):
         self.assertIn('changed-deferred-gaps:http-003', self.module.apply_deferrals(rows, manifest)['errors'])
 
     def test_sudden_success_of_one_or_all_deferred_rows_fails(self):
-        for count in (1, 9):
+        for count in (1, 4):
             rows = copy.deepcopy(self.rows)
             for row in rows[:count]: row.update(gaps=[], positive_and_negative_complete=True)
             result = self.module.apply_deferrals(rows, self.manifest)
             self.assertIn('unexpected-deferred-pass:http-003', result['errors'])
-            self.assertEqual(9-count, result['deferred'])
+            self.assertEqual(4-count, result['deferred'])
+
+    def test_retired_rows_cannot_reappear_as_gaps_or_be_silently_deferred(self):
+        for key in ('http-013', 'http-014', 'http-020', 'http-021', 'http-048'):
+            rows = self.rows + [{'id': key, 'gaps': ['branch:regression'], 'positive_and_negative_complete': False}]
+            self.assertIn('unreviewed-row:' + key, self.module.apply_deferrals(rows, self.manifest)['errors'])
+            manifest = copy.deepcopy(self.manifest); manifest[key] = manifest['http-003']
+            self.assertIn('invalid-deferral-manifest', self.module.apply_deferrals(rows, manifest)['errors'])
 
     def test_missing_duplicate_or_malformed_row_is_never_accepted(self):
         variants = [self.rows[1:], self.rows + [self.rows[0]],

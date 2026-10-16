@@ -11,8 +11,8 @@
       "zbm_core_test_mode:negative:wrong_role",
       "zbm_core_test_mode:positive-control"
     ],
-    "reason": "Administrative test-mode routing awaits a product decision.",
-    "required_environment": "Approved routing policy and native WordPress form tests for the selected policy."
+    "reason": "Administrative test-mode routing remains deliberately deferred by product policy.",
+    "required_environment": "An explicit future product decision and native WordPress routing and form tests."
   },
   "http-004": {
     "gaps": [
@@ -26,55 +26,15 @@
       "zbm_core_test_mode:negative:wrong_role",
       "zbm_core_test_mode:positive-control"
     ],
-    "reason": "Administrative test-mode routing awaits a product decision.",
-    "required_environment": "Approved routing policy and native WordPress form tests for the selected policy."
-  },
-  "http-013": {
-    "gaps": [
-      "branch:accept_late",
-      "branch:reopen_deposit"
-    ],
-    "reason": "Two lifecycle branches do not yet have complete native form evidence.",
-    "required_environment": "Disposable WooCommerce database with valid reopen-deposit and accept-late fixtures and durable effect checks."
-  },
-  "http-014": {
-    "gaps": [
-      "branch:cancel_review",
-      "negative:form:invalid_nonce",
-      "negative:form:no_nonce",
-      "negative:form:other_buyer",
-      "negative:form:other_vendor",
-      "negative:form:wrong_role",
-      "positive:form-contract",
-      "safety:identity-guard"
-    ],
-    "reason": "Preservation evidence does not complete the cancellation form contract.",
-    "required_environment": "Valid online payment fixture, native cancellation form controls and authorized provider verification on staging."
+    "reason": "Administrative test-mode routing remains deliberately deferred by product policy.",
+    "required_environment": "An explicit future product decision and native WordPress routing and form tests."
   },
   "http-015": {
     "gaps": [
       "positive-and-negative-controls:purchase-request-test-recovery"
     ],
-    "reason": "Legacy recovery form awaits the customer email policy decision.",
-    "required_environment": "Approved email policy, native WooCommerce customer and order persistence, and real form requests."
-  },
-  "http-020": {
-    "gaps": [
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_buyer",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_vendor",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:wrong_role"
-    ],
-    "reason": "Commercial dependency checks precede the requested actor-specific controls.",
-    "required_environment": "Staging with actual Dokan Pro and YITH, distinct actor identities, and native role and ownership response checks."
-  },
-  "http-021": {
-    "gaps": [
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_buyer",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_vendor",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:wrong_role"
-    ],
-    "reason": "Commercial dependency checks precede the requested actor-specific controls.",
-    "required_environment": "Staging with actual Dokan Pro and YITH, distinct actor identities, and native role and ownership response checks."
+    "reason": "The shared order validator awaits review of the minimal correction; the email product policy is already settled.",
+    "required_environment": "Approved validator change, native WooCommerce account/order persistence and real legacy form regression."
   },
   "http-042": {
     "gaps": [
@@ -85,14 +45,5 @@
     ],
     "reason": "Vendor page actor-specific controls require the commercial integration environment.",
     "required_environment": "Staging with actual Dokan Pro and YITH and native vendor page role and ownership checks."
-  },
-  "http-048": {
-    "gaps": [
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_buyer",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:other_vendor",
-      "zbm_create_purchase_request:negative:blocked-by-dependency:wrong_role"
-    ],
-    "reason": "Commercial dependency checks precede the requested actor-specific controls.",
-    "required_environment": "Staging with actual Dokan Pro and YITH, distinct actor identities, and native role and ownership response checks."
   }
 }

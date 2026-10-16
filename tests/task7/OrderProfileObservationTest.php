@@ -36,6 +36,7 @@ final class OrderProfileObservationTest extends TestCase {
             $buyer = wp_insert_user(['user_login' => 'task7_profile_' . str_replace('-', '', wp_generate_uuid4()),
                 'user_pass' => wp_generate_password(32, true, true), 'user_email' => 'profile' . wp_generate_uuid4() . substr($email, strpos($email, chr(64))), 'role' => 'customer']);
             self::assertFalse(is_wp_error($buyer)); self::assertGreaterThan(0, $buyer);
+            $accountEmail = get_userdata($buyer)->user_email;
             $mobile = '09120000000'; update_user_meta($buyer, 'billing_phone', $mobile);
             $vendor = (int) get_user_by('login', 'zbm_test_vendor_1')->ID;
             update_user_meta($vendor, 'dokan_enable_selling', 'yes');
@@ -61,9 +62,13 @@ final class OrderProfileObservationTest extends TestCase {
             self::assertSame(0, proc_close($process), 'The isolated native observation must finish normally.');
             self::assertSame('', $stderr, 'No native warning or fatal error is allowed.');
             $result = json_decode($output, true, 64, JSON_THROW_ON_ERROR);
+            self::assertNotFalse(file_put_contents(__DIR__ . '/../../evidence/task7-profile-' . $route . '.json',
+                wp_json_encode($result, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)));
             self::assertNotSame('native_exception', $result['result_error'], 'Observation infrastructure must invoke the actual native service.');
             self::assertNotEmpty($result['observations'], 'The route must reach the actual native managed-order save boundary.');
             self::assertTrue($result['native_service']); self::assertTrue($result['account_email_present']);
+            clean_user_cache($buyer);
+            self::assertSame($accountEmail, get_userdata($buyer)->user_email, 'The observation must preserve the existing account contact value.');
             self::assertTrue($result['mobile_preserved'], 'The observation must not alter buyer mobile data.');
             // Observation is deliberately outcome-neutral until product review.
             // Existing acceptance/deferral guards remain authoritative and unchanged.
