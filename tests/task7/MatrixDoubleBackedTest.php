@@ -357,7 +357,12 @@ final class MatrixDoubleBackedTest extends TestCase {
                         'role_contract' => 'Native source permits every logged-in actor to buy another vendor product; buyer is derived from the authenticated session.'];
                 } elseif ($scenario === 'guest') {
                     self::assertSame(302, $http['status']); $location = Task4EndpointHttp::header($http, 'Location');
-                    self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST)); self::assertStringContainsString('zbm_request_return=', $location);
+                    self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+                    $query = []; parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+                    self::assertSame('1', (string) ($query['zbm_register'] ?? ''));
+                    self::assertSame(1, preg_match('/^Set-Cookie:\s*zbm_request_return=([^;]+)([^\r\n]*)/mi', $http['headers'], $returnCookie));
+                    self::assertSame($productUrl, rawurldecode(rawurldecode($returnCookie[1])));
+                    self::assertStringContainsString('httponly', strtolower($returnCookie[2]));
                     self::assertSame($before, $after); $control += ['result' => 'guest-login-preparation', 'snapshot_unchanged' => true];
                 } else {
                     self::assertSame(303, $http['status']); $notice = Task4EndpointHttp::option('_transient_zbm_request_notice_' . $this->user($actor));
