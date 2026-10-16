@@ -71,6 +71,16 @@ final class ProcessConcurrencyTest extends TestCase {
         $ids = array_values(array_unique(array_map('intval', $ids))); sort($ids); return $ids;
     }
 
+    private static function financialSnapshot(): array {
+        global $wpdb;
+        $schema = new Schema($wpdb);
+        $tables = [$schema->payments_table(), $schema->ledger_table(),
+            $schema->financial_actions_table(), $schema->dokan_credit_mirrors_table()];
+        $snapshot = array_intersect_key(Task4ManagedFixture::snapshot(), array_flip($tables));
+        self::assertCount(4, $snapshot);
+        return $snapshot;
+    }
+
     private static function flow(Task4ManagedFixture $fixture, string $operation, string $role = 'vendor', ?int $actor = null): array {
         return ['kind' => 'flow', 'request_id' => $fixture->id, 'version' => $fixture->case()['version'],
             'actor_id' => $actor ?? $fixture->users['vendor_1'], 'role' => $role, 'key' => wp_generate_uuid4(),
@@ -160,6 +170,8 @@ final class ProcessConcurrencyTest extends TestCase {
 
     public function test_simultaneous_delivery_code_consumption_has_one_commit_and_no_reusable_code(): void {
         $fixture = new Task4ManagedFixture('flow_deliver'); $before = $fixture->case();
+        $financeBefore = self::financialSnapshot(); $ordersBefore = self::orders($fixture->id);
+        self::assertCount(1, $ordersBefore);
         self::assertNotNull($before['data']['delivery']['hmac']); self::assertNotEmpty($fixture->extra['code']);
         $first = self::flow($fixture, 'deliver'); $second = self::flow($fixture, 'deliver');
         $race = Task7ProcessHarness::run([$first, $second]); self::assertOneWinner($race);
@@ -168,13 +180,16 @@ final class ProcessConcurrencyTest extends TestCase {
         self::assertNull($after['data']['delivery']['hmac']); self::assertNull($after['data']['delivery']['encrypted_code']);
         self::assertSame($before['data']['delivery']['generation'], $after['data']['delivery']['generation']);
         $events = self::audit($fixture->id, ['managed_deliver']); self::assertCount(1, $events);
-        self::assertCount(1, self::orders($fixture->id));
+        self::assertSame($ordersBefore, self::orders($fixture->id));
+        self::assertSame($financeBefore, self::financialSnapshot(), 'Delivery must not create or change a financial effect.');
         self::evidence('simultaneous-code-consume', ['race' => $race, 'version_delta' => 1, 'delivery_events' => count($events),
-            'code_hmac_cleared' => true, 'encrypted_code_cleared' => true, 'orders' => 1]);
+            'code_hmac_cleared' => true, 'encrypted_code_cleared' => true, 'orders' => 1, 'financial_mutations' => 0]);
     }
 
     public function test_conflicting_same_version_status_commands_have_one_winner_and_one_audit_event(): void {
         $fixture = new Task4ManagedFixture('flow_ready_pickup'); $before = $fixture->case();
+        $financeBefore = self::financialSnapshot(); $ordersBefore = self::orders($fixture->id);
+        self::assertCount(1, $ordersBefore);
         self::assertSame('preparing', $before['state']); self::assertSame(0, $before['data']['delivery']['generation']);
         $ready = self::flow($fixture, 'ready_pickup');
         $reopen = self::flow($fixture, 'reopen_preparation', 'admin', $fixture->users['admin']);
@@ -189,8 +204,9 @@ final class ProcessConcurrencyTest extends TestCase {
             self::assertNull($after['data']['delivery']['hmac']);
             foreach ($after['data']['lines'] as $line) { self::assertNull($line['vendor_tenths']); }
         }
-        self::assertCount(1, self::orders($fixture->id));
+        self::assertSame($ordersBefore, self::orders($fixture->id));
+        self::assertSame($financeBefore, self::financialSnapshot(), 'Conflicting preparation commands must preserve all financial rows.');
         self::evidence('conflicting-status', ['race' => $race, 'version_delta' => 1, 'winning_event' => $events[0]['event_key'],
-            'final_state' => $after['state'], 'transition_events' => count($events), 'orders' => 1]);
+            'final_state' => $after['state'], 'transition_events' => count($events), 'orders' => 1, 'financial_mutations' => 0]);
     }
 }
