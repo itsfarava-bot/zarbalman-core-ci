@@ -115,7 +115,8 @@ final class MatrixDoubleBackedTest extends TestCase {
         self::assertSame(302, $http['status']);
         self::assertSame(admin_url('admin.php?page=zbm-core-requests'), Task4EndpointHttp::header($http, 'Location'));
         $notice = Task4EndpointHttp::option('_transient_zbm_admin_request_notice_' . $this->user('admin'));
-        self::assertSame(['type' => $type, 'message' => $message], $notice); return $notice;
+        self::assertIsArray($notice); $expected = ['type' => $type, 'message' => $message];
+        ksort($expected); ksort($notice); self::assertSame($expected, $notice); return $notice;
     }
     private function deny(array $http, int $status, string $message): void {
         self::assertSame($status, $http['status']);
@@ -287,18 +288,22 @@ final class MatrixDoubleBackedTest extends TestCase {
             }
             $product = Task4RemainingFixture::product($vendor, 'Task seven native creation matrix product');
             $values = Task4RemainingFixture::createFields($product, $vendor); $controls = [];
+            // Capture the native form as a buyer who may purchase this vendor's product.
+            // Actor controls submit that form after changing the authenticated session;
+            // the owning vendor need not have a purchase form rendered on its own product.
+            [$renderCookie] = CandidateHttp::auth($this->user('buyer_1'), 'zbm_create_purchase_request');
+            $productUrl = get_permalink($product->get_id()); self::assertIsString($productUrl);
+            $productQuery = []; parse_str((string) parse_url($productUrl, PHP_URL_QUERY), $productQuery);
+            $render = Task4EndpointHttp::get((string) parse_url($productUrl, PHP_URL_PATH), $productQuery, $renderCookie);
+            self::assertSame(200, $render['status']); $form = $this->form($render['body'], 'create');
+            self::assertSame((string) $product->get_id(), $form['product_id']);
+            self::assertSame('', $form['_zbm_nonce']); self::assertSame('', $form['idempotency_key']);
             foreach (['wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce', 'guest'] as $scenario) {
                 $actor = match ($scenario) { 'wrong_role' => 'vendor_1', 'other_buyer' => 'buyer_2', 'other_vendor' => 'vendor_2', 'guest' => 'guest', default => 'buyer_1' };
                 if ($actor === 'guest') { $cookie = ''; }
                 else { [$cookie] = CandidateHttp::auth($this->user($actor), 'zbm_create_purchase_request'); }
-                $productUrl = get_permalink($product->get_id()); self::assertIsString($productUrl);
-                $productQuery = []; parse_str((string) parse_url($productUrl, PHP_URL_QUERY), $productQuery);
-                $render = Task4EndpointHttp::get((string) parse_url($productUrl, PHP_URL_PATH), $productQuery, $cookie);
-                self::assertSame(200, $render['status']); $form = $this->form($render['body'], 'create');
-                self::assertSame((string) $product->get_id(), $form['product_id']);
-                // Fill the actual form's user controls; discard inactive pickup branch inputs.
-                self::assertSame('', $form['_zbm_nonce']); self::assertSame('', $form['idempotency_key']);
-                $fields = $values;
+                // Preserve native routing/identity fields, fill user controls, and omit inactive pickup inputs.
+                $fields = array_replace($values, array_intersect_key($form, array_flip(['action', 'product_id', 'variation_id', '_zbm_nonce', 'idempotency_key'])));
                 // Match the browser's native auth-state refresh: the rendered fields
                 // start empty and the public AJAX endpoint supplies this session's nonce.
                 $auth = CandidateHttp::post('wp-admin/admin-ajax.php', ['action' => 'zbm_request_auth_state', 'product_id' => (string) $product->get_id()], $cookie);

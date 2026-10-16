@@ -15,6 +15,7 @@ final class ActionSchedulerNativeTest extends TestCase {
     private array $requests = [];
     private array $actions = [];
     private array $hooks = [];
+    private array $savedOptions = [];
     private array $savedSms = [];
     private bool $savedSmsFailure = false;
     private bool $transportReady = false;
@@ -23,6 +24,17 @@ final class ActionSchedulerNativeTest extends TestCase {
         parent::setUp();
         self::assertTrue(defined('ZBM_TEST_SANDBOX') && ZBM_TEST_SANDBOX === true);
         self::assertTrue(defined('DISABLE_WP_CRON') && DISABLE_WP_CRON === true);
+        // These tests run first to keep recovery's database population fresh.
+        // The registered SMS adapter shares a DependencyHealth instance with
+        // payment endpoints: its first send caches the entire health report.
+        // Establish the real runtime prerequisites before that first read,
+        // matching the later native payment fixtures without mocking health.
+        foreach (['woocommerce_currency' => 'IRT', 'woocommerce_weight_unit' => 'kg'] as $option => $value) {
+            $this->savedOptions[$option] = get_option($option, null);
+            update_option($option, $value);
+        }
+        self::assertSame('IRT', get_woocommerce_currency());
+        self::assertSame('kg', get_option('woocommerce_weight_unit'));
         self::assertTrue(class_exists('ActionScheduler'));
         self::assertSame('3.9.3', ActionScheduler_Versions::instance()->latest_version());
         $runner = ActionScheduler::runner();
@@ -66,6 +78,9 @@ final class ActionSchedulerNativeTest extends TestCase {
         if ($this->transportReady) {
             PWSMS()->sent = $this->savedSms;
             PWSMS()->fail = $this->savedSmsFailure;
+        }
+        foreach ($this->savedOptions as $option => $value) {
+            $value === null ? delete_option($option) : update_option($option, $value);
         }
         parent::tearDown();
     }

@@ -12,10 +12,26 @@ use Zarbalman\Core\Infrastructure\Schema;
  */
 final class ProcessConcurrencyTest extends TestCase {
     private ?Task5DependencyDoubles $doubles = null;
+    private array $previousOptions = [];
+
+    protected function setUp(): void {
+        parent::setUp();
+        foreach (['woocommerce_currency' => 'IRT', 'woocommerce_weight_unit' => 'kg'] as $key => $value) {
+            $missing = new stdClass(); $previous = get_option($key, $missing);
+            $this->previousOptions[$key] = ['exists' => $previous !== $missing, 'value' => $previous === $missing ? null : $previous];
+            update_option($key, $value, false);
+        }
+    }
 
     protected function tearDown(): void {
         try { $this->doubles?->restore(); }
-        finally { $this->doubles = null; wp_set_current_user(0); }
+        finally {
+            $this->doubles = null;
+            foreach ($this->previousOptions as $key => $previous) {
+                if ($previous['exists']) { update_option($key, $previous['value'], false); } else { delete_option($key); }
+            }
+            wp_set_current_user(0); parent::tearDown();
+        }
     }
 
     private function install(): Task5DependencyDoubles {
