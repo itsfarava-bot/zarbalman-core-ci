@@ -83,7 +83,8 @@ def creation():
         actor = ['vendor_1', 'buyer_2', 'vendor_2'][number]
         control = {'test': M.CREATION, 'catalog_ids': M.CREATE_IDS, 'assertion_status': 'passed', 'actual_http': True, 'http': 303,
             'actor': actor, 'before_snapshot': snapshot(), 'after_snapshot': snapshot(), 'dependency_error_absent': True,
-            'actual_form_submitted': True, 'account_emails_unchanged': True, 'provider_calls_added': 0}
+            'actual_form_submitted': True, 'account_emails_unchanged': True, 'provider_calls_added': 0,
+            'render_boundary': 'native-registered-woocommerce-hook-http-harness', 'theme_integration_proved': False}
         if scenario == 'wrong_role':
             control.update(result='rejected-exact-contract-no-persisted-effect', snapshot_unchanged=True,
                 notice={'type': 'error', 'code': 'zbm_self_purchase_forbidden', 'message': 'فروشنده نمی‌تواند برای محصول خودش درخواست خرید ثبت کند.'})
@@ -252,6 +253,14 @@ class OverlayContractsTest(unittest.TestCase):
     def test_self_purchase_requires_exact_error_code(self):
         self.data['controls']['zbm_create_purchase_request']['controls']['wrong_role']['notice']['code'] = 'zbm_request_dependencies_unavailable'
         self.assertEqual(self.creation_gaps(), self.overlay('http-020', self.creation_gaps())[0])
+
+    def test_render_boundary_must_not_claim_theme_integration(self):
+        for key, value in [('render_boundary', 'theme-product-page'), ('theme_integration_proved', True)]:
+            with self.subTest(key=key):
+                saved = copy.deepcopy(self.data)
+                self.data['controls']['zbm_create_purchase_request']['controls']['other_buyer'][key] = value
+                self.assertEqual(self.creation_gaps(), self.overlay('http-020', self.creation_gaps())[0])
+                self.data = saved
 
     def test_allowed_actors_must_create_new_own_request_and_ignore_posted_identity(self):
         mutations = [('request_id', 0), ('stored_buyer_id', 1), ('stored_vendor_id', 22), ('requests_after_count', 40),

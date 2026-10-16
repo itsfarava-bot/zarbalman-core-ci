@@ -23,10 +23,18 @@ final class DependencyBootTest extends TestCase {
     }
 
     /** @dataProvider nativeFailures */
-    public function test_native_dependency_failure_boots_without_partial_business_mutation(string $scenario, string $failedKey): void {
+    public function test_native_dependency_failure_has_a_bounded_outcome_without_partial_business_mutation(string $scenario, string $failedKey): void {
         $before = Task7DependencyHarness::snapshot();
         $facts = Task7DependencyHarness::boot($scenario);
         self::assertSame($before, Task7DependencyHarness::snapshot(), 'A dependency boot/denied creation must not persist partial orders, requests, cash, audit or account changes.');
+        if ($scenario === 'scheduler_bootstrap_unavailable') {
+            self::assertFalse($facts['boot_completed'], 'Record the native dependency error; never claim successful boot.');
+            self::assertSame(['class' => Error::class, 'code' => 'native_queue_boot_unavailable'], $facts['boot_error']);
+        } else {
+            self::assertTrue($facts['boot_completed']); self::assertNull($facts['boot_error']);
+        }
+        self::assertNotFalse(file_put_contents(__DIR__ . '/../../evidence/task7-dependency-' . $scenario . '.json',
+            wp_json_encode($facts, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)));
         self::assertFalse($facts['health'][$failedKey]);
         self::assertNotNull($facts['deposit_error']);
         if (in_array($scenario, ['missing_woocommerce', 'missing_woo_and_scheduler'], true)) {

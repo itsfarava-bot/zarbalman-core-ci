@@ -175,6 +175,8 @@ def _creation(record, junit):
         control = controls.get(scenario)
         if not (isinstance(control, dict) and control.get('test') == CREATION and control.get('catalog_ids') == CREATE_IDS
                 and control.get('assertion_status') == 'passed' and control.get('actual_http') is True
+                and control.get('render_boundary') == 'native-registered-woocommerce-hook-http-harness'
+                and control.get('theme_integration_proved') is False
                 and control.get('http') == 303 and control.get('actor') == actor and _snapshot_pair(control)
                 and all(control.get(key) is True for key in ('dependency_error_absent', 'actual_form_submitted', 'account_emails_unchanged'))
                 and type(control.get('provider_calls_added')) is int and control['provider_calls_added'] == 0):

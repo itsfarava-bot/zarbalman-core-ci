@@ -5,11 +5,19 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli' || count($argv) !== 2) { exit(2); }
 $root = getenv('ZBM_TEST_WP_ROOT');
 if (!is_string($root) || !is_file($root . '/wp-load.php')) { exit(2); }
-require $root . '/wp-load.php';
-if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { exit(2); }
 $scenario = getenv('ZBM_TASK7_DEPENDENCY_SCENARIO');
+$bootError = null;
+try { require $root . '/wp-load.php'; }
+catch (Error $failure) {
+    if ($scenario !== 'scheduler_bootstrap_unavailable'
+        || basename($failure->getFile()) !== 'CronActions.php'
+        || !str_ends_with($failure->getMessage(), 'as_unschedule_all_actions()')) { throw $failure; }
+    $bootError = ['class' => get_class($failure), 'code' => 'native_queue_boot_unavailable'];
+}
+if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { exit(2); }
 $facts = [
     'native_subprocess' => true, 'pid' => getmypid(),
+    'boot_completed' => $bootError === null, 'boot_error' => $bootError,
     'woocommerce_loaded' => class_exists('WooCommerce'),
     'dokan_loaded' => function_exists('dokan_is_user_seller'),
     'yith_loaded' => class_exists('YITH_WCDP'),

@@ -295,7 +295,13 @@ final class MatrixDoubleBackedTest extends TestCase {
             $productUrl = get_permalink($product->get_id()); self::assertIsString($productUrl);
             $productQuery = []; parse_str((string) parse_url($productUrl, PHP_URL_QUERY), $productQuery);
             $render = Task4EndpointHttp::get((string) parse_url($productUrl, PHP_URL_PATH), $productQuery, $renderCookie);
-            self::assertSame(200, $render['status']); $form = $this->form($render['body'], 'create');
+            self::assertSame(200, $render['status']);
+            self::assertNotFalse(file_put_contents(__DIR__ . '/../../evidence/task7-product-page.html', $render['body']));
+            $render = Task4EndpointHttp::get('task4-endpoint-harness.php',
+                ['view' => 'product-form', 'product_id' => (string) $product->get_id()], $renderCookie);
+            self::assertSame(200, $render['status']);
+            self::assertNotFalse(file_put_contents(__DIR__ . '/../../evidence/task7-product-form.html', $render['body']));
+            $form = $this->form($render['body'], 'create');
             self::assertSame((string) $product->get_id(), $form['product_id']);
             self::assertSame('', $form['_zbm_nonce']); self::assertSame('', $form['idempotency_key']);
             foreach (['wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce', 'guest'] as $scenario) {
@@ -322,6 +328,7 @@ final class MatrixDoubleBackedTest extends TestCase {
                 $http = CandidateHttp::post('wp-admin/admin-post.php', $fields, $cookie);
                 $after = Task4ManagedFixture::snapshot(); self::assertSame($emails, $this->emailFingerprint()); self::assertSame($calls, count($this->doubles->calls()));
                 $control = ['test' => __METHOD__, 'catalog_ids' => $ids, 'actual_http' => true, 'assertion_status' => 'passed',
+                    'render_boundary' => 'native-registered-woocommerce-hook-http-harness', 'theme_integration_proved' => false,
                     'http' => $http['status'], 'actor' => $actor, 'before_snapshot' => $before, 'after_snapshot' => $after,
                     'dependency_error_absent' => true, 'actual_form_submitted' => true, 'account_emails_unchanged' => true, 'provider_calls_added' => 0];
                 if (in_array($scenario, ['other_buyer', 'other_vendor'], true)) {
