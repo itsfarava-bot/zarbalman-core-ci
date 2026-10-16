@@ -48,6 +48,32 @@ class NativeFailure(Exception):
         super().__init__('Native inventory command failed: ' + str(status))
 
 
+def native_configuration(root):
+    """Append additive coverage without editing or dropping the original suite.
+
+    Queue tests need the fresh database before the older financial fixtures.
+    Absolute paths preserve PHPUnit path resolution in the generated evidence file.
+    """
+    if not (root / 'tests/task7').is_dir():
+        return 'phpunit-task4.xml'
+    tree = ET.parse(root / 'phpunit-task4.xml')
+    config = tree.getroot()
+    suites = config.findall('testsuites/testsuite')
+    if len(suites) != 1 or not config.get('bootstrap'):
+        raise ValueError('Expected one authoritative native suite and bootstrap')
+    config.set('bootstrap', str(root / config.get('bootstrap')))
+    for node in config.findall('testsuites/testsuite/*'):
+        if node.tag not in ('file', 'directory') or not node.text:
+            raise ValueError('Unsupported native suite entry')
+        node.text = str(root / node.text)
+    addition = ET.Element('directory')
+    addition.text = str(root / 'tests/task7')
+    suites[0].insert(0, addition)
+    target = 'evidence/task7-phpunit.xml'
+    tree.write(root / target, encoding='utf-8', xml_declaration=True)
+    return target
+
+
 def selection(environment):
     partition = environment.get('ZBM_SUITE_PARTITION', 'all')
     focused_filter = environment.get('ZBM_PHPUNIT_FILTER', '')
@@ -143,8 +169,9 @@ def main(root=ROOT, environment=None):
     root = Path(root)
     evidence = root / 'evidence'
     evidence.mkdir(exist_ok=True)
-    base = [str(root / 'vendor/bin/phpunit'), '--configuration=phpunit-task4.xml']
     try:
+        configuration = native_configuration(root)
+        base = [str(root / 'vendor/bin/phpunit'), '--configuration=' + configuration]
         partition, focused_filter = selection(environment)
         if partition != 'all':
             guard_partition(root, base, partition)
