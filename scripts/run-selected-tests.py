@@ -66,9 +66,16 @@ def native_configuration(root):
         if node.tag not in ('file', 'directory') or not node.text:
             raise ValueError('Unsupported native suite entry')
         node.text = str(root / node.text)
-    addition = ET.Element('directory')
-    addition.text = str(root / 'tests/task7')
-    suites[0].insert(0, addition)
+    additions = sorted((root / 'tests/task7').rglob('*Test.php'))
+    if not additions:
+        raise ValueError('Empty additive native suite')
+    for path in additions:
+        addition = ET.Element('file')
+        addition.text = str(path)
+        if path.name == 'ActionSchedulerNativeTest.php':
+            suites[0].insert(0, addition)
+        else:
+            suites[0].append(addition)
     target = 'evidence/task7-phpunit.xml'
     tree.write(root / target, encoding='utf-8', xml_declaration=True)
     return target

@@ -16,6 +16,8 @@ class AdditiveSuiteTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / 'tests/task7').mkdir(parents=True)
+            (root / 'tests/task7/ActionSchedulerNativeTest.php').write_text('queue')
+            (root / 'tests/task7/OtherTest.php').write_text('other')
             (root / 'evidence').mkdir()
             original = '<phpunit bootstrap="tests/bootstrap.php" failOnRisky="true"><testsuites><testsuite name="original"><directory>tests/smoke</directory><file>tests/first.php</file><file>tests/last.php</file></testsuite></testsuites></phpunit>'
             (root / 'phpunit-task4.xml').write_text(original)
@@ -25,8 +27,10 @@ class AdditiveSuiteTest(unittest.TestCase):
             self.assertEqual(tree.get('bootstrap'), str(root / 'tests/bootstrap.php'))
             entries = list(tree.find('testsuites/testsuite'))
             self.assertEqual([(n.tag, n.text) for n in entries], [
-                ('directory', str(root / 'tests/task7')), ('directory', str(root / 'tests/smoke')),
-                ('file', str(root / 'tests/first.php')), ('file', str(root / 'tests/last.php'))])
+                ('file', str(root / 'tests/task7/ActionSchedulerNativeTest.php')),
+                ('directory', str(root / 'tests/smoke')),
+                ('file', str(root / 'tests/first.php')), ('file', str(root / 'tests/last.php')),
+                ('file', str(root / 'tests/task7/OtherTest.php'))])
             self.assertEqual((root / 'phpunit-task4.xml').read_text(), original)
 
     def test_old_inventory_without_new_directory_remains_unchanged(self):
