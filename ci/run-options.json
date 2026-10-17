@@ -1,4 +1,4 @@
 {
-  "scope": "full",
-  "filter": ""
+  "scope": "focused",
+  "filter": "DependencyDoubleBackedTest::test_manual_recovery_waits_for_yith_without_creating_orders_or_cash_and_resumes_once"
 }

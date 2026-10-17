@@ -216,6 +216,73 @@ final class DependencyDoubleBackedTest extends TestCase {
             'observed_response' => $json, 'request_id' => $request->id(), 'snapshot_unchanged' => true, 'before_snapshot' => $before, 'after_snapshot' => Task4ManagedFixture::snapshot(), 'account_emails_unchanged' => true,
             'effect' => 'Normal settings API selects manual route; native missing-YITH error precedes offer/order/finance mutation.']);
     }
+    private function manualProbe(int $requestId, string $operation): array {
+        $process = proc_open([PHP_BINARY, __DIR__ . '/../support/Task7ManualRecoveryProbe.php'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        fwrite($pipes[0], json_encode(['request_id' => $requestId, 'operation' => $operation], JSON_THROW_ON_ERROR));
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]); fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+        self::assertSame(0, proc_close($process), 'Native manual recovery probe must finish normally.');
+        self::assertSame('', $stderr, 'Native recovery must not emit warnings.');
+        return json_decode($output, true, 32, JSON_THROW_ON_ERROR);
+    }
+
+    public function test_manual_recovery_waits_for_yith_without_creating_orders_or_cash_and_resumes_once(): void {
+        global $wpdb;
+        $facts = $this->facts(['yith' => true, 'gateway' => true, 'supporting' => true]);
+        $this->onlyFailures($facts, []);
+        [$request, $repos, $product] = $this->request('live');
+        $settings = new ManualPaymentSettings(new ProtectedText(new DeliveryDataCrypto()), $repos['audit']);
+        self::assertTrue($settings->save($this->user('admin'), ['enabled' => true, 'card_number' => '4242424242424242', 'holder_name' => 'Synthetic Holder'], 'Synthetic recovery setup'));
+        $availability = new OnlinePaymentAvailability($wpdb, $repos['audit']);
+        self::assertTrue($availability->setStopped($this->user('admin'), true, $availability->control()['revision'], 'Synthetic recovery route'));
+        self::assertSame(['error' => null, 'yith_ok' => true], $this->manualProbe($request->id(), 'offer'));
+        $pending = $repos['cases']->find($request->id());
+        self::assertSame(1, $pending['sync_pending']);
+        self::assertSame('manual_order_sync', $pending['data']['recovery']['operation']);
+        $before = $repos['requests']->find($request->id());
+        self::assertNull($before->wcOrderId());
+        $ordersBefore = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}wc_orders");
+        self::assertSame('', $wpdb->last_error);
+        $money = $this->financialCounts($request->id()); $emails = $this->emailFingerprint();
+        $stock = wc_get_product($product->get_id())->get_stock_quantity();
+        $this->doubles->configure(['yith' => false, 'gateway' => true, 'supporting' => true]);
+        for ($attempt = 1; $attempt <= 2; ++$attempt) {
+            $observed = $this->manualProbe($request->id(), 'recover');
+            $fresh = $repos['requests']->find($request->id());
+            $case = $repos['cases']->find($request->id());
+            self::assertFalse($observed['yith_ok'], 'Only a genuinely absent YITH satisfies this control.');
+            self::assertNull($fresh->wcOrderId(), 'Missing YITH must not create a durable manual order.');
+            self::assertSame($ordersBefore, (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}wc_orders"));
+            self::assertSame('', $wpdb->last_error);
+            self::assertSame($before->state(), $fresh->state());
+            self::assertSame($before->stockReserved(), $fresh->stockReserved());
+            self::assertSame($stock, wc_get_product($product->get_id())->get_stock_quantity());
+            self::assertSame($money, $this->financialCounts($request->id()));
+            self::assertSame($emails, $this->emailFingerprint());
+            self::assertSame('zbm_manual_order_dependencies_unavailable', $observed['error']);
+            self::assertSame(1, $case['sync_pending']);
+            self::assertSame($pending['state'], $case['state']);
+            self::assertSame($pending['data']['recovery']['event_uuid'], $case['data']['recovery']['event_uuid']);
+            self::assertSame('zbm_manual_order_dependencies_unavailable', $case['data']['recovery']['last_error_code']);
+            self::assertSame($attempt, $case['data']['recovery']['attempts']);
+        }
+        $this->doubles->configure(['yith' => true, 'gateway' => true, 'supporting' => true]);
+        self::assertSame(['error' => null, 'yith_ok' => true], $this->manualProbe($request->id(), 'recover'));
+        $orderId = $repos['requests']->find($request->id())->wcOrderId();
+        self::assertGreaterThan(0, $orderId);
+        self::assertSame(0, $repos['cases']->find($request->id())['sync_pending']);
+        self::assertSame($ordersBefore + 1, (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}wc_orders"));
+        self::assertSame(['error' => null, 'yith_ok' => true], $this->manualProbe($request->id(), 'recover'));
+        self::assertSame($orderId, $repos['requests']->find($request->id())->wcOrderId());
+        self::assertSame($ordersBefore + 1, (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}wc_orders"));
+        self::assertSame('', $wpdb->last_error);
+        self::assertSame($money, $this->financialCounts($request->id()));
+        self::assertSame([], $this->doubles->calls());
+    }
+
     private function recoverTest($request): array {
         [$cookie, $nonce] = CandidateHttp::auth($this->user('admin'), 'zbm_admin_request_control_' . $request->id());
         return CandidateHttp::post('wp-admin/admin-post.php', ['action' => 'zbm_admin_request_control', 'operation' => 'test_advance',
