@@ -243,7 +243,21 @@ def publish(args):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
             output.write(text)
     print(text, end='')
+    if args.aggregate is None:
+        print(result_annotation(data, args.root))
     return int(unavailable)
+
+
+def result_annotation(data, root):
+    # Public annotations are visible even when detailed logs require login.
+    # Revalidate fields; never publish assertion text, identities or raw logs.
+    counts = {}
+    for key in COUNTERS:
+        value = data.get('counts', {}).get(key)
+        counts[key] = value if type(value) is int and 0 <= value <= 1000000000 else None
+    locations = [safe_location(issue.get('location'), root)
+                 for issue in data.get('failures', [])[:8] if isinstance(issue, dict)]
+    return '::notice title=Verification result::' + json.dumps({'counts': counts, 'locations': locations})
 
 
 def main():

@@ -29,7 +29,8 @@ class SafeSummaryTest(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertNotIn('Traceback', result.stderr)
             self.assertEqual(expected_exit, result.returncode, result.stderr)
-            return summary.read_text(), json.loads((root / '.runtime/safe-summary.json').read_text())
+            # Check both publication channels for accidental raw diagnostics.
+            return summary.read_text() + result.stdout, json.loads((root / '.runtime/safe-summary.json').read_text())
 
     def test_publish_only_safe_failure_metadata(self):
         xml = '''<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe" file="/runner/tests/SyntheticTest.php" line="2"><failure>Failed asserting that false is true.
@@ -60,6 +61,20 @@ secret@example.invalid token=synthetic-only-secret</failure></testcase></testsui
         self.assertNotIn('do-not-publish', summary)
         self.assertEqual(2, data['counts']['tests'])
         self.assertEqual([], data['failures'])
+
+    def test_public_annotation_contains_only_bounded_sanitized_result_metadata(self):
+        xml = '''<testsuites><testsuite tests="1" assertions="2" failures="1" errors="0" skipped="0"><testcase classname="SyntheticTest" name="test_safe"><failure>Bearer synthetic-private-token
+/runner/tests/SyntheticTest.php:7</failure></testcase></testsuite></testsuites>'''
+        summary, data = self.run_summary('Tests: 1, Assertions: 2, Failures: 1.', xml)
+        prefix = '::notice title=Verification result::'
+        notices = [line for line in summary.splitlines() if line.startswith(prefix)]
+        self.assertEqual(1, len(notices))
+        result = json.loads(notices[0][len(prefix):])
+        self.assertEqual(data['counts'], result['counts'])
+        self.assertEqual(['tests/SyntheticTest.php:7'], result['locations'])
+        self.assertEqual({'counts', 'locations'}, set(result))
+        self.assertNotIn('synthetic-private-token', summary)
+        self.assertNotIn('/runner', notices[0])
 
     def test_dataset_cannot_publish_contact_number_or_identifier(self):
         xml = '<testsuites><testsuite><testcase classname="SyntheticTest" name="test_safe with data set &quot;09120000000&quot;"><failure>Failed asserting that false is true.</failure></testcase></testsuite></testsuites>'
