@@ -1,4 +1,4 @@
 {
-  "scope": "focused",
-  "filter": "FinancialDoubleBackedTest|ZarinpalResponseContractTest|DependencyPaymentTest|DependencyDoubleBackedTest"
+  "scope": "full",
+  "filter": ""
 }
