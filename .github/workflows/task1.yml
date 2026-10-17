@@ -3,6 +3,7 @@ permissions:
   contents: read
 env:
   TZ: Asia/Tehran
+  PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   database-image:
     needs: secret-scan
@@ -16,9 +17,17 @@ jobs:
         fetch-depth: 0
     - name: Check 1
       id: resolve
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nset -euo pipefail\nfor patch in 19 18 17 16 15 14 13; do\n  image=\"mariadb:10.11.$patch\"\n  if docker\
-        \ manifest inspect \"$image\" >/dev/null 2>&1; then\n    echo \"image=$image\" >> \"$GITHUB_OUTPUT\"\n    echo \"Selected $image; CI reference 10.11.19\"\n\
-        \    exit 0\n  fi\ndone\necho \"No verified MariaDB image near 10.11.19\" >&2\nexit 1\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nset -euo pipefail\nfor patch in 19; do\n  image=\"mariadb:10.11.$patch\"\n  if docker manifest inspect \"$image\" >/dev/null 2>&1; then\n    echo \"image=$image\" >> \"$GITHUB_OUTPUT\"\n    echo \"Selected $image; CI reference 10.11.19\"\n    exit 0\n  fi\ndone\necho \"No verified MariaDB image near 10.11.19\" >&2\nexit 1\nCI_COMMAND\n"
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -69,6 +78,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -88,6 +107,9 @@ jobs:
       with:
         persist-credentials: false
         fetch-depth: 0
+    - name: Select checks
+      id: plan
+      run: python3 scripts/ci-options.py
     - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
       with:
         php-version: 8.2.34
@@ -109,10 +131,28 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Check outcome controls
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        python3 scripts/verify-test-result-controls.py
+
+        CI_COMMAND
+
+        '
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: composer-lock
         path: composer.lock
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
         if-no-files-found: error
         retention-days: 7
     - name: Seal diagnostics
@@ -126,6 +166,9 @@ jobs:
         if-no-files-found: error
         retention-days: 1
     timeout-minutes: 60
+    outputs:
+      scope: ${{ steps.plan.outputs.scope }}
+      filter: ${{ steps.plan.outputs.filter }}
   smoke:
     needs:
     - dependencies
@@ -216,9 +259,17 @@ jobs:
         '
     - name: Check 6
       if: always()
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version\
-        \ --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\n\
-        wp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\nwp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -323,6 +374,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -405,6 +466,16 @@ jobs:
         path: .runtime/public-summary.json
         if-no-files-found: error
         retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -438,6 +509,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
     - name: Seal diagnostics
       if: always()
       run: python3 scripts/seal-diagnostics.py
@@ -515,6 +596,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
     - name: Check 4
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -539,9 +630,7 @@ jobs:
         '
     - name: Check 6
       if: always()
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version\
-        \ --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\n\
-        wp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\nwp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
     - name: Check 7
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -555,7 +644,11 @@ jobs:
 
         cp tests/support/Task4RemainingHarness.php .runtime/wp/task4-remaining-harness.php
 
-        php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log 2>&1 &
+        cp tests/support/Task4RegistryHarness.php .runtime/wp/task4-registry-harness.php
+
+        cp tests/support/Task6GuestObserver.php .runtime/wp/wp-content/mu-plugins/task6-guest-observer.php
+
+        PHP_CLI_SERVER_WORKERS=4 php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log 2>&1 &
 
         server_pid=$!
 
@@ -565,21 +658,38 @@ jobs:
 
         set -o pipefail
 
-        vendor/bin/phpunit --configuration=phpunit-task4.xml --log-junit=evidence/candidate-junit.xml | tee evidence/candidate-phpunit.txt
+        python3 scripts/run-selected-tests.py
+
+        CI_COMMAND
+
+        '
+    - name: Check HTTP coverage
+      if: always()
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        python3 scripts/check-http-matrix.py --run-start evidence/http-matrix-run-start
 
         CI_COMMAND
 
         '
     - name: Check 8
       if: always()
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\nif source.is_file():\n\
-        \    lines=source.read_text(errors='replace').splitlines()\n    pathlib.Path('evidence/task4-http-errors.txt').write_text('\\n'.join(line for line in lines\
-        \ if re.search(r'PHP (Fatal error|Warning|Parse error)|Uncaught|^#[0-9]|thrown in',line))+'\\n')\nPYCODE\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\nif source.is_file():\n    lines=source.read_text(errors='replace').splitlines()\n    pathlib.Path('evidence/task4-http-errors.txt').write_text('\\n'.join(line for line in lines if re.search(r'PHP (Fatal error|Warning|Parse error)|Uncaught|^#[0-9]|thrown in',line))+'\\n')\nPYCODE\nCI_COMMAND\n"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
         name: summary-candidate-regressions
         path: .runtime/public-summary.json
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
         if-no-files-found: error
         retention-days: 7
     - name: Seal diagnostics
@@ -595,7 +705,10 @@ jobs:
     env:
       ZBM_WP_VERSION: 7.1.2
       XDEBUG_MODE: 'off'
+      ZBM_SUITE_PARTITION: main
+      ZBM_TEST_SCOPE: full
     timeout-minutes: 60
+    if: needs.dependencies.outputs.scope == 'full'
   task4-fast-diagnosis:
     needs:
     - dependencies
@@ -662,6 +775,16 @@ jobs:
         CI_COMMAND
 
         '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
     - name: Check 4
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -686,9 +809,7 @@ jobs:
         '
     - name: Check 6
       if: always()
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version\
-        \ --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\n\
-        wp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\nwp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
     - name: Check 7
       run: 'python3 scripts/public-run.py <<''CI_COMMAND''
 
@@ -702,7 +823,11 @@ jobs:
 
         cp tests/support/Task4RemainingHarness.php .runtime/wp/task4-remaining-harness.php
 
-        php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log 2>&1 &
+        cp tests/support/Task4RegistryHarness.php .runtime/wp/task4-registry-harness.php
+
+        cp tests/support/Task6GuestObserver.php .runtime/wp/wp-content/mu-plugins/task6-guest-observer.php
+
+        PHP_CLI_SERVER_WORKERS=4 php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log 2>&1 &
 
         server_pid=$!
 
@@ -712,22 +837,29 @@ jobs:
 
         set -o pipefail
 
-        vendor/bin/phpunit --configuration=phpunit-task4.xml --filter=''RuntimeAlignmentTest|FinanceRollbackTest|LifecycleTest|flow_record_weight/admin-post.php|test_hpos_metabox_actual_forms_submit_through_workflow_handler''
-        --log-junit=evidence/candidate-junit.xml | tee evidence/candidate-phpunit.txt
+        python3 scripts/run-selected-tests.py
 
         CI_COMMAND
 
         '
     - name: Check 8
       if: always()
-      run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\nif source.is_file():\n\
-        \    lines=source.read_text(errors='replace').splitlines()\n    pathlib.Path('evidence/task4-http-errors.txt').write_text('\\n'.join(line for line in lines\
-        \ if re.search(r'PHP (Fatal error|Warning|Parse error)|Uncaught|^#[0-9]|thrown in',line))+'\\n')\nPYCODE\nCI_COMMAND\n"
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\nif source.is_file():\n    lines=source.read_text(errors='replace').splitlines()\n    pathlib.Path('evidence/task4-http-errors.txt').write_text('\\n'.join(line for line in lines if re.search(r'PHP (Fatal error|Warning|Parse error)|Uncaught|^#[0-9]|thrown in',line))+'\\n')\nPYCODE\nCI_COMMAND\n"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
         name: summary-task4-fast-diagnosis
         path: .runtime/public-summary.json
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
         if-no-files-found: error
         retention-days: 7
     - name: Seal diagnostics
@@ -743,14 +875,242 @@ jobs:
     env:
       ZBM_WP_VERSION: 7.1.2
       XDEBUG_MODE: 'off'
+      ZBM_PHPUNIT_FILTER: ${{ needs.dependencies.outputs.filter }}
+      ZBM_TEST_SCOPE: focused
     timeout-minutes: 60
+    if: needs.dependencies.outputs.scope == 'focused'
+  security-regressions:
+    needs:
+    - dependencies
+    - database-image
+    runs-on: ubuntu-24.04
+    services:
+      db:
+        image: ${{ needs.database-image.outputs.image }}
+        env:
+          MARIADB_ROOT_PASSWORD: zbm_ci_root_only
+          MARIADB_DATABASE: zbm_task1
+          MARIADB_USER: zbm_test
+          MARIADB_PASSWORD: zbm_test_only
+        ports:
+        - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: composer-lock
+        path: .
+    - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+      with:
+        php-version: 8.2.34
+        extensions: mysqli, mbstring, dom, xml, curl, zip, gd, :imagick
+        tools: composer:2.8.12, wp-cli:2.12.0
+        coverage: none
+        ini-values: date.timezone=Asia/Tehran, opcache.enable=0
+    - name: Check 1
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        export COMPOSER_HOME="$RUNNER_TEMP/zbm-composer-isolated"
+
+        export COMPOSER_AUTH=''{}''
+
+        composer install --no-scripts --no-plugins --no-interaction --prefer-dist
+
+        CI_COMMAND
+
+        '
+    - name: Check 2
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        find plugin -name ''*.php'' -print0 | xargs -0 -n1 php -l
+
+        CI_COMMAND
+
+        '
+    - name: Check 3
+      env:
+        ZBM_TEST_SANDBOX: '1'
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        export COMPOSER_HOME="$RUNNER_TEMP/zbm-composer-isolated"
+
+        export COMPOSER_AUTH=''{}''
+
+        bash scripts/setup.sh
+
+        CI_COMMAND
+
+        '
+    - name: Inspect schema
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        mkdir -p evidence
+
+        wp eval-file ci/inspect-runtime-schema.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
+    - name: Check 4
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        wp eval-file ci/verify-stub-contracts.php --use-include --path=.runtime/wp
+
+        CI_COMMAND
+
+        '
+    - name: Check 5
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        php -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-server.log 2>&1 &
+
+        server_pid=$!
+
+        trap ''kill "$server_pid"'' EXIT
+
+        curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/ > /tmp/zbm-home.html
+
+        CI_COMMAND
+
+        '
+    - name: Check 6
+      if: always()
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\nphp -v\ncomposer --version\nwp --version\nif test -f .runtime/wp/wp-config.php; then\n  wp core version --path=.runtime/wp\n  wp plugin list --path=.runtime/wp --fields=name,status,version\nfi\n\nwp option get woocommerce_custom_orders_table_enabled --path=.runtime/wp\nwp option get woocommerce_custom_orders_table_data_sync_enabled --path=.runtime/wp\nCI_COMMAND\n"
+    - name: Check 7
+      run: 'python3 scripts/public-run.py <<''CI_COMMAND''
+
+        export ZBM_TEST_WP_ROOT="$PWD/.runtime/wp"
+
+        mkdir -p evidence
+
+        cp tests/support/upload-http.php .runtime/wp/zbm-candidate-upload.php
+
+        cp tests/support/Task4EndpointHarness.php .runtime/wp/task4-endpoint-harness.php
+
+        cp tests/support/Task4RemainingHarness.php .runtime/wp/task4-remaining-harness.php
+
+        cp tests/support/Task4RegistryHarness.php .runtime/wp/task4-registry-harness.php
+
+        cp tests/support/Task6GuestObserver.php .runtime/wp/wp-content/mu-plugins/task6-guest-observer.php
+
+        PHP_CLI_SERVER_WORKERS=4 php -d upload_max_filesize=10M -d post_max_size=12M -S 127.0.0.1:8080 -t .runtime/wp > /tmp/zbm-candidates-http.log 2>&1 &
+
+        server_pid=$!
+
+        trap ''kill "$server_pid"'' EXIT
+
+        curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/ > /tmp/zbm-candidate-home.html
+
+        set -o pipefail
+
+        python3 scripts/run-selected-tests.py
+
+        CI_COMMAND
+
+        '
+    - name: Check 8
+      if: always()
+      run: "python3 scripts/public-run.py <<'CI_COMMAND'\npython3 - <<'PYCODE'\nimport pathlib,re\nsource=pathlib.Path('/tmp/zbm-candidates-http.log')\nif source.is_file():\n    lines=source.read_text(errors='replace').splitlines()\n    pathlib.Path('evidence/task4-http-errors.txt').write_text('\\n'.join(line for line in lines if re.search(r'PHP (Fatal error|Warning|Parse error)|Uncaught|^#[0-9]|thrown in',line))+'\\n')\nPYCODE\nCI_COMMAND\n"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: summary-security-regressions
+        path: .runtime/public-summary.json
+        if-no-files-found: error
+        retention-days: 7
+    - name: Publish bounded summary
+      if: always()
+      run: python3 scripts/safe-summary.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: safe-summary-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/safe-summary.json
+        if-no-files-found: error
+        retention-days: 7
+    - name: Seal diagnostics
+      if: always()
+      run: python3 scripts/seal-diagnostics.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: diagnostics-${{ github.job }}-${{ matrix.wordpress || 'single' }}
+        path: .runtime/diagnostics.cms
+        if-no-files-found: error
+        retention-days: 1
+    env:
+      ZBM_WP_VERSION: 7.1.2
+      XDEBUG_MODE: 'off'
+      ZBM_SUITE_PARTITION: security
+      ZBM_TEST_SCOPE: full
+    timeout-minutes: 60
+    if: needs.dependencies.outputs.scope == 'full'
+  run-summary:
+    needs:
+    - database-image
+    - secret-scan
+    - dependencies
+    - smoke
+    - static-analysis
+    - standards-security
+    - style-report
+    - candidate-regressions
+    - task4-fast-diagnosis
+    - security-regressions
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        persist-credentials: false
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: safe-summary-*
+        path: .runtime/summaries
+    - name: Summarize run
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: python3 scripts/safe-summary.py --aggregate .runtime/summaries
 'on':
   push:
     branches:
     - main
+    paths-ignore:
+    - docs/**
+    - README
+    - README.*
+    - '**/README'
+    - '**/README.*'
   pull_request:
     branches:
     - main
+    paths-ignore:
+    - docs/**
+    - README
+    - README.*
+    - '**/README'
+    - '**/README.*'
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Test scope
+        type: choice
+        options:
+        - focused
+        - full
+        default: focused
+        required: true
+      filter:
+        description: PHPUnit filter
+        type: string
+        required: false
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true

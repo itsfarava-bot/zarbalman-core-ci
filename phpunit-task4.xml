@@ -12,6 +12,7 @@
       <file>tests/candidates/RequestNumberEntropyTest.php</file>
       <file>tests/task4/RuntimeAlignmentTest.php</file>
       <file>tests/task4/NotificationModeTest.php</file>
+      <file>tests/task4/LegacyNotificationSettingTest.php</file>
       <file>tests/task4/FinanceRollbackTest.php</file>
       <file>tests/task4/RequestNumberCompatibilityTest.php</file>
       <file>tests/task4/LifecycleTest.php</file>
@@ -21,6 +22,17 @@
       <file>tests/task4/ManagedRoleBranchesTest.php</file>
       <file>tests/task4/EvidencePurposePrivacyTest.php</file>
       <file>tests/task4/RemainingEndpointsTest.php</file>
+      <file>tests/task4/PaymentEndpointControlsTest.php</file>
+      <file>tests/task4/EndpointFormControlsTest.php</file>
+      <file>tests/task4/FormBranchControlsTest.php</file>
+      <file>tests/task4/LegacyRequestFormControlsTest.php</file>
+      <file>tests/task4/RegisteredHttpSurfacesTest.php</file>
+      <file>tests/task5/DependencyDoubleBackedTest.php</file>
+      <file>tests/task5/FinancialDoubleBackedTest.php</file>
+      <file>tests/task6/ZarinpalResponseContractTest.php</file>
+      <file>tests/task6/DokanAmountContractTest.php</file>
+      <file>tests/task4/HttpRiskControlsTest.php</file>
+      <file>tests/task6/GuestStructureTest.php</file>
     </testsuite>
   </testsuites>
 </phpunit>

@@ -1,12 +1,12 @@
 <?php
 /**
  * Plugin Name:       Zarbalman Core
- * Plugin URI:        https://example.invalid/
- * Update URI:        https://example.invalid/plugins/zarbalman-core
+ * Plugin URI:        https://zarbalman.ir/
+ * Update URI:        https://zarbalman.ir/plugins/zarbalman-core
  * Description:       هسته امن و قابل توسعه گردش سفارش زربال‌من.
  * Version:           1.0.4
  * Requires at least: 6.8
- * Requires PHP:      8.1
+ * Requires PHP:      8.2
  * Author:            Zarbalman
  * Text Domain:       zarbalman-core
  * Domain Path:       /languages

@@ -23,3 +23,6 @@ phpstan-result-cache.php
 node_modules/
 strix_runs/
 .phpunit.result.cache
+
+__pycache__/
+*.pyc

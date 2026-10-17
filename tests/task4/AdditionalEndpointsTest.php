@@ -4,12 +4,20 @@ require_once __DIR__ . '/../support/CandidateFixture.php';
 require_once __DIR__ . '/../support/HttpClient.php';
 require_once __DIR__ . '/../support/Task4EndpointHttp.php';
 require_once __DIR__ . '/../support/Task4EndpointFixture.php';
+require_once __DIR__ . '/../support/Task5NativeAdminBootstrap.php';
 use PHPUnit\Framework\TestCase;
 use Zarbalman\Core\Infrastructure\{Schema, WorkflowStore, ProtectedText, DeliveryDataCrypto};
 use Zarbalman\Core\Application\ManualPaymentSettings;
 use Zarbalman\Core\Integration\{DokanVendorEligibility, ZarinpalBalanceAdapter};
 
 final class AdditionalEndpointsTest extends TestCase {
+    private array $adminBootstrap = [];
+
+    protected function setUp(): void {
+        parent::setUp();
+        $this->adminBootstrap = Task5NativeAdminBootstrap::prime();
+        self::assertSame(200, $this->adminBootstrap['final_http'], 'Native admin bootstrap must precede isolated endpoint fixtures.');
+    }
     public static function setUpBeforeClass(): void {
         parent::setUpBeforeClass();
         $names = ['evidence-download-legacy-and-managed', 'manual-settings-and-online-control',
@@ -28,7 +36,7 @@ final class AdditionalEndpointsTest extends TestCase {
         $file = __DIR__ . '/../../evidence/task4-additional-http.json';
         $rows = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
         if (!is_array($rows)) { $rows = []; }
-        try { $detail = $test(); $rows[$name] = ['status' => 'passed', 'detail' => $detail]; }
+        try { $detail = $test(); $detail['admin_bootstrap'] = $this->adminBootstrap; $rows[$name] = ['status' => 'passed', 'detail' => $detail]; }
         catch (Throwable $error) {
             $rows[$name] = ['status' => 'failed', 'reason' => $error->getMessage()];
             file_put_contents($file, wp_json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -61,9 +69,10 @@ final class AdditionalEndpointsTest extends TestCase {
     private function result(array $http, string $result): void {
         self::assertSame(302, $http['status']);
         $location = Task4EndpointHttp::header($http, 'Location');
+        self::assertSame($location, wp_validate_redirect($location, ''));
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
         self::assertSame($result, $query['zbm_result'] ?? null);
-        self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+        self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url(wp_validate_redirect($location, home_url('/')), PHP_URL_HOST) ?? parse_url(home_url('/'), PHP_URL_HOST));
     }
     protected function tearDown(): void {
         wp_set_current_user(0); unset($_COOKIE[LOGGED_IN_COOKIE]);
@@ -227,6 +236,17 @@ final class AdditionalEndpointsTest extends TestCase {
         $this->scenario('hpos-metabox-and-workflow-forms', function (): array {
             global $wpdb;
             self::assertTrue(wc_get_container()->get(\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController::class)->custom_orders_table_usage_is_enabled(), 'HPOS must be active, not silently skipped.');
+            // Initialize the real admin bootstrap before creating the isolated order.
+            [$initialCookie] = CandidateHttp::auth($this->user('admin'), 'unused-admin-bootstrap');
+            for ($attempt = 0; $attempt < 2; ++$attempt) {
+                $initial = Task4EndpointHttp::get('wp-admin/index.php', [], $initialCookie);
+                if ($initial['status'] === 200) { break; }
+                self::assertSame(302, $initial['status']);
+                $location = Task4EndpointHttp::header($initial, 'Location');
+                self::assertSame(parse_url(home_url('/'), PHP_URL_HOST), parse_url($location, PHP_URL_HOST));
+                self::assertStringStartsWith('/wp-admin/', (string) parse_url($location, PHP_URL_PATH));
+            }
+            self::assertSame(200, Task4EndpointHttp::get('wp-admin/index.php', [], $initialCookie)['status']);
             $order = wc_create_order(['customer_id' => $this->user('buyer_1')]);
             $id = $order->get_id(); $admin = $this->user('admin');
             $store = new WorkflowStore($wpdb, CandidateFixture::repositories()['audit']);
@@ -246,12 +266,12 @@ final class AdditionalEndpointsTest extends TestCase {
                     if ($name === 'missing_nonce') { unset($payload['_wpnonce']); }
                     if ($name === 'invalid_nonce') { $payload['_wpnonce'] = 'invalid'; }
                     if ($name === 'changed_order') { $payload['order_id'] = '2147483646'; }
-                    $before = $store->snapshot($id); $count = $this->auditCount();
+                    $before = $store->snapshot($id); $count = $this->auditCount(); $money = CandidateFixture::financialSnapshot();
                     $http = CandidateHttp::post('wp-admin/admin-post.php', $payload, $actorCookie);
                     if ($name === 'guest') { self::assertFalse(has_action('admin_post_nopriv_' . $valid['action'])); self::assertSame(400, $http['status']); self::assertStringContainsString('wp-die-message', $http['body']); }
-                    elseif ($roleDenied) { $this->result($http, 'forbidden'); }
+                    elseif ($roleDenied) { $this->result($http, $name === 'wrong_buyer' && $valid['action'] === 'zbm_core_transition' ? 'zbm_transition_forbidden' : 'forbidden'); }
                     else { $this->denied($http, 403, __('The link you followed has expired.')); }
-                    self::assertSame($before, $store->snapshot($id)); self::assertSame($count, $this->auditCount());
+                    self::assertSame($before, $store->snapshot($id)); self::assertSame($count, $this->auditCount()); self::assertSame($money, CandidateFixture::financialSnapshot());
                     $rows[$key . '/' . $name] = ['http' => $http['status'], 'reason' => $name === 'guest' ? 'WordPress dispatcher: no public handler' : ($roleDenied ? 'forbidden' : 'nonce rejected')];
                 }
             }

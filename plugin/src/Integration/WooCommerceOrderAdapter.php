@@ -1021,7 +1021,7 @@ final class WooCommerceOrderAdapter implements ManagedOrderCreator {
 	 */
 	private function orderStockReduced( WC_Order $order ): bool {
 		$store = $order->get_data_store();
-		if ( is_object( $store ) && method_exists( $store, 'get_stock_reduced' ) && method_exists( $store, 'set_stock_reduced' ) ) {
+		if ( $store instanceof \WC_Data_Store && $store->has_callable( 'get_stock_reduced' ) && $store->has_callable( 'set_stock_reduced' ) ) {
 			return (bool) $store->get_stock_reduced( $order->get_id() );
 		}
 		return 'yes' === $order->get_meta( '_order_stock_reduced', true );
@@ -1030,7 +1030,7 @@ final class WooCommerceOrderAdapter implements ManagedOrderCreator {
 	/** @param bool $reduced Whether the order-level stock state is reduced. */
 	private function setOrderStockReduced( WC_Order $order, bool $reduced ): void {
 		$store = $order->get_data_store();
-		if ( is_object( $store ) && method_exists( $store, 'get_stock_reduced' ) && method_exists( $store, 'set_stock_reduced' ) ) {
+		if ( $store instanceof \WC_Data_Store && $store->has_callable( 'get_stock_reduced' ) && $store->has_callable( 'set_stock_reduced' ) ) {
 			$store->set_stock_reduced( $order->get_id(), $reduced );
 			return;
 		}

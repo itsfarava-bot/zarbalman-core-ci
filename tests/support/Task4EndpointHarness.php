@@ -6,7 +6,22 @@ $view = isset($_GET['view']) && is_string($_GET['view']) ? $_GET['view'] : '';
 if ($view === 'metabox' && !defined('WP_ADMIN')) { define('WP_ADMIN', true); }
 require __DIR__ . '/wp-load.php';
 if (!defined('ZBM_TEST_SANDBOX') || ZBM_TEST_SANDBOX !== true) { http_response_code(403); exit('Sandbox required'); }
-if ($view === 'reports') {
+if ($view === 'product-form') {
+    $product = wc_get_product(absint($_GET['product_id'] ?? 0));
+    if (!$product instanceof WC_Product) { http_response_code(404); exit('Product missing'); }
+    $GLOBALS['product'] = $product;
+    $GLOBALS['post'] = get_post($product->get_id());
+    setup_postdata($GLOBALS['post']);
+    $registered = false;
+    foreach (($GLOBALS['wp_filter']['woocommerce_single_product_summary']->callbacks[31] ?? []) as $entry) {
+        $callback = $entry['function'];
+        if (is_array($callback) && $callback[0] instanceof Zarbalman\Core\Frontend\BuyerRequestController
+            && $callback[1] === 'renderProductRequestForm') { $registered = true; }
+    }
+    if (!$registered) { http_response_code(500); exit('Native product form registration missing'); }
+    do_action('woocommerce_single_product_summary');
+    wp_reset_postdata();
+} elseif ($view === 'reports') {
     do_action('dokan_load_custom_template', ['zbm-vendor-reports' => true]);
 } elseif ($view === 'metabox') {
     try {
@@ -26,6 +41,13 @@ if ($view === 'reports') {
         http_response_code(500);
         echo wp_json_encode(['sandbox_error'=>get_class($error),'message'=>$error->getMessage(),'file'=>basename($error->getFile()),'line'=>$error->getLine()]);
     }
+} elseif ($view === 'deadline-sweep') {
+    if (!current_user_can('manage_options')) { wp_send_json(['code' => 'sandbox_admin_required'], 403); }
+    $hook = Zarbalman\Core\Infrastructure\DeadlineScheduler::RECOVERY_HOOK;
+    $registered = has_action($hook);
+    $scheduled = as_has_scheduled_action($hook, [], Zarbalman\Core\Infrastructure\Scheduler::GROUP);
+    do_action($hook);
+    wp_send_json(['registered' => $registered, 'scheduled' => $scheduled]);
 } elseif ($view === 'login-return') {
     // The actual registered login filters consume the HTTP cookie.
     $fallback = home_url('/safe-login-fallback/');

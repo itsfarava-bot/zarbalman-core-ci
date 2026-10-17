@@ -566,13 +566,13 @@ final class ManualPaymentService {
 
 	/** @return array|WP_Error */
 	private function recoverLocked( int $request_id, array $case ): array|WP_Error {
-		if ( 0 === $case['sync_pending'] ) {
-			return $case;
-		}
-		$request = $this->requests->find( $request_id );
-		$recovery = $case['data']['recovery'];
-		if ( ! $request || ! is_string( $recovery['event_uuid'] ) || ! wp_is_uuid( $recovery['event_uuid'] ) || ! is_string( $recovery['operation'] ) ) {
-			return $this->error( 'recovery_identity' );
+		if ( 0 === $case['sync_pending'] ) { return $case; }
+		$request = $this->requests->find( $request_id ); $recovery = $case['data']['recovery'];
+		if ( ! $request || ! is_string( $recovery['event_uuid'] ) || ! wp_is_uuid( $recovery['event_uuid'] ) || ! is_string( $recovery['operation'] ) ) { return $this->error( 'recovery_identity' ); }
+		$dependency_error = $this->health->manualOrderError();
+		if ( $dependency_error ) {
+			$recorded = $this->recordRecoveryFailure( $request, $case, (string) $dependency_error->get_error_code() );
+			return is_wp_error( $recorded ) ? $recorded : $dependency_error;
 		}
 		try {
 			$order_id = $request->wcOrderId() ?? 0;

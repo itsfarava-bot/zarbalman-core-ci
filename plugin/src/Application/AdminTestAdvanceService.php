@@ -85,6 +85,11 @@ final class AdminTestAdvanceService {
 			return new WP_Error( 'zbm_test_advance_retired', __( 'شروع پروندهٔ آزمایشی جدید بازنشسته شده است؛ این مسیر فقط یک پروندهٔ test_pending قدیمی را بازیابی می‌کند.', 'zarbalman-core' ) );
 		}
 
+		$dependency_error = $this->health->testManagedOrderError();
+		if ( $dependency_error ) {
+			return $dependency_error;
+		}
+
 		try {
 			$order_id = $this->order_creator->createTestForAcceptedRequest( $request );
 		} catch ( Throwable ) {

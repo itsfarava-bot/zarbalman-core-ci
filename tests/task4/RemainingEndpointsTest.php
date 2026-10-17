@@ -103,9 +103,45 @@ final class RemainingEndpointsTest extends TestCase {
         });
     }
 
+    public function test_testmode_wrong_role_preserves_each_legacy_setting(): void {
+        $previous = get_option(AdminTestModeManager::OPTION, null);
+        try {
+            foreach (['yes', 'no'] as $setting) {
+                update_option(AdminTestModeManager::OPTION, $setting, false);
+                [$cookie, $nonce] = $this->auth('buyer_1', 'zbm_core_test_mode');
+                $before = $this->stable();
+                $http = CandidateHttp::post('wp-admin/admin-post.php', ['action' => 'zbm_core_test_mode', '_zbm_nonce' => $nonce, 'operation' => 'disable', 'reason' => 'Synthetic setting preservation'], $cookie);
+                self::assertSame($setting, Task4EndpointHttp::option(AdminTestModeManager::OPTION));
+                self::assertSame($before, $this->stable());
+                $this->denied($http, 500, 'دسترسی غیرمجاز است.');
+            }
+        } finally {
+            $previous === null ? delete_option(AdminTestModeManager::OPTION) : update_option(AdminTestModeManager::OPTION, $previous, false);
+        }
+    }
+
     public function test_admin_testmode_disable_is_durable_and_enable_is_retired(): void {
         $action = 'zbm_core_test_mode'; $fields = ['operation' => 'disable', 'reason' => 'Synthetic legacy setting retirement'];
-        $this->adminNegatives($action, $action, $fields, '_zbm_nonce', 'دسترسی غیرمجاز است.', 400);
+        foreach (['guest', 'wrong_role', 'other_buyer', 'other_vendor', 'no_nonce', 'invalid_nonce'] as $scenario) {
+            $this->row($action, $scenario, function () use ($action, $fields, $scenario): array {
+                $actor = match ($scenario) { 'guest' => 'guest', 'wrong_role' => 'buyer_1', 'other_buyer' => 'buyer_2', 'other_vendor' => 'vendor_2', default => 'admin' };
+                [$cookie, $nonce] = $this->auth($actor, $action);
+                $payload = ['action' => $action] + $fields;
+                if ($scenario !== 'no_nonce') { $payload['_zbm_nonce'] = $scenario === 'invalid_nonce' ? 'invalid' : $nonce; }
+                $before = $this->stable(); $option = Task4EndpointHttp::option(AdminTestModeManager::OPTION);
+                $http = CandidateHttp::post('wp-admin/admin-post.php', $payload, $cookie);
+                self::assertSame($option, Task4EndpointHttp::option(AdminTestModeManager::OPTION)); self::assertSame($before, $this->stable());
+                if ($scenario === 'guest') {
+                    self::assertFalse(has_action('admin_post_nopriv_' . $action));
+                    self::assertSame(400, $http['status']); self::assertStringContainsString('wp-die-message', $http['body']);
+                    return ['http' => 400, 'effect' => 'no-persisted-effect', 'generic_dispatcher_only' => true];
+                }
+                $reason = in_array($scenario, ['no_nonce', 'invalid_nonce'], true) ? __('The link you followed has expired.') : 'دسترسی غیرمجاز است.';
+                $status = in_array($scenario, ['no_nonce', 'invalid_nonce'], true) ? 403 : 500;
+                $this->denied($http, $status, $reason);
+                return ['http' => $status, 'effect' => 'no-persisted-effect', 'reason' => $reason];
+            });
+        }
         $this->row($action, 'authorized_disable_positive', function () use ($action, $fields): array {
             update_option(AdminTestModeManager::OPTION, 'yes', false); [$cookie, $nonce] = $this->auth('admin', $action);
             $http = CandidateHttp::post('wp-admin/admin-post.php', ['action' => $action, '_zbm_nonce' => $nonce] + $fields, $cookie);

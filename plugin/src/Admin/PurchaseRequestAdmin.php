@@ -309,8 +309,8 @@ final class PurchaseRequestAdmin {
 		<?php
 	}
 
-	/** @return array|\WP_Error Legacy TEST_PENDING only; no new test execution can start. */
-	private function recoverLegacyTest( int $request_id, int $version, string $reason, string $idempotency ): array|\WP_Error {
+	/** @return PurchaseRequest|\WP_Error Legacy TEST_PENDING only; no new test execution can start. */
+	private function recoverLegacyTest( int $request_id, int $version, string $reason, string $idempotency ): PurchaseRequest|\WP_Error {
 		$request = $this->repository->find( $request_id );
 		if ( ! $request || ExecutionMode::TEST_PENDING !== $request->executionMode() ) {
 			return new \WP_Error( 'zbm_legacy_test_only', __( 'شروع پروندهٔ آزمایشی جدید غیرفعال است؛ فقط بازیابی پروندهٔ قدیمی مجاز است.', 'zarbalman-core' ) );
