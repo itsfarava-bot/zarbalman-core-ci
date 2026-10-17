@@ -24,7 +24,7 @@
   "src/Application/BalancePaymentService.php": "747591fdd4c21d9b5038640cf445f7642f7387179d270fd2a2836a573d028d1b",
   "src/Application/DepositPaymentService.php": "b0b2ef4b1d83d1cb3b4775ccdd01c605a272c72eba6c1ac3f7b213f6f611d34e",
   "src/Application/ManagedFlowService.php": "8ce2378b3323a354d6d11db4fe811da8f47150910d496b976bd871cdee86311a",
-  "src/Application/ManualPaymentService.php": "f9155b7ccf73cce0a73859fb789ddc6b148038b0ba6de32af57e0a83e3b0b01f",
+  "src/Application/ManualPaymentService.php": "9e5a87d0f2e1f8c38333c64cf92cc2d11a549636fe9018d32378a3e0c25a23f5",
   "src/Application/ManualPaymentSettings.php": "66d817e5b3350c2a6030e277a22e272de90a5f8612d053645df81582e060513a",
   "src/Application/PurchaseRequestInput.php": "c4adc445ca9db64dc086b548677fec7f163f0d74a997d040565d6b87b3b1edd1",
   "src/Application/PurchaseRequestService.php": "0720bc8cba45ac0254b0d2fde3ae865fd3d50e96717e631c1b9c28d509de4134",
