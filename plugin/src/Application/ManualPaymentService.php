@@ -574,6 +574,11 @@ final class ManualPaymentService {
 		if ( ! $request || ! is_string( $recovery['event_uuid'] ) || ! wp_is_uuid( $recovery['event_uuid'] ) || ! is_string( $recovery['operation'] ) ) {
 			return $this->error( 'recovery_identity' );
 		}
+		$dependency_error = $this->health->manualOrderError();
+		if ( $dependency_error ) {
+			$recorded = $this->recordRecoveryFailure( $request, $case, $dependency_error->get_error_code() );
+			return is_wp_error( $recorded ) ? $recorded : $dependency_error;
+		}
 		try {
 			$order_id = $request->wcOrderId() ?? 0;
 			if ( 'manual_order_sync' === $recovery['operation'] ) {
