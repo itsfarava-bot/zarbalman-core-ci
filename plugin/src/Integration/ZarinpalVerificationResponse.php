@@ -46,7 +46,7 @@ final class ZarinpalVerificationResponse {
 				: new self( self::UNAVAILABLE );
 		}
 		$code = $data_code ?? $error_code;
-		return in_array( $code, array( -50, -51, -53, -54, -55 ), true )
+		return in_array( $code, array( -51, -53, -54, -55 ), true )
 			? new self( self::REJECTED )
 			: new self( self::UNAVAILABLE );
 	}

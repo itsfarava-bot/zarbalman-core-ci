@@ -321,7 +321,7 @@ final class FinancialDoubleBackedTest extends TestCase {
         }
     }
 
-    public function test_amount_mismatch_keeps_receipt_and_reaches_the_admin_review_queue_without_cash(): void {
+    public function test_amount_mismatch_keeps_receipt_visible_to_the_admin_without_cash(): void {
         $doubles = $this->install();
         foreach (['errors', 'data'] as $envelope) {
             $fixture = new Task5FinancialFixture();
@@ -332,23 +332,26 @@ final class FinancialDoubleBackedTest extends TestCase {
                         'merchant_id' => 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL']]]]);
             for ($attempt = 0; $attempt < 2; ++$attempt) {
                 $http = $this->performObservedCallback('amount-mismatch-' . $envelope . '-' . $attempt, $fixture, $doubles);
-                self::assertSame(503, $http['status']);
-                self::assertStringContainsString('نتیجهٔ پرداخت موقتاً قابل استعلام نیست؛ شناسه callback ذخیره شد و بازیابی خودکار ادامه پیدا می‌کند.',
-                    html_entity_decode(strip_tags($http['body']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                 $facts = $fixture->assertNoCash();
                 self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
                 self::assertSame($fixture->authority, $facts['payment'][0]['authority']);
                 self::assertSame('deposit_pending', $facts['state']);
                 self::assertTrue($fixture->request()->stockReserved());
+                self::assertSame(503, $http['status']);
+                self::assertStringContainsString('نتیجهٔ پرداخت موقتاً قابل استعلام نیست؛ شناسه callback ذخیره شد و بازیابی خودکار ادامه پیدا می‌کند.',
+                    html_entity_decode(strip_tags($http['body']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
             }
-            $fixture->expireNatively('late_payment_review');
+            wp_set_current_user($fixture->users['admin']);
+            $rows = $fixture->repos['cases']->operationsPage('deposit');
+            self::assertContains($fixture->id, array_map('intval', array_column($rows, 'id')));
+            [$adminCookie] = CandidateHttp::auth($fixture->users['admin'], 'task7-mismatch-admin-view');
+            $adminHttp = Task4EndpointHttp::get('wp-admin/admin.php', ['page' => 'zbm-core-operations', 'request' => $fixture->id], $adminCookie);
+            self::assertSame(200, $adminHttp['status']);
+            self::assertStringContainsString($fixture->request()->requestNumber(), $adminHttp['body']);
             $facts = $fixture->assertNoCash();
             self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
-            wp_set_current_user($fixture->users['admin']);
-            $rows = $fixture->repos['cases']->operationsPage('review');
-            self::assertContains($fixture->id, array_map('intval', array_column($rows, 'id')));
             Task5FinancialFixture::evidence('amount-mismatch-' . $envelope, ['receipt_retained' => true,
-                'callback_http' => 503, 'admin_review_visible_after_expiry' => true, 'no_cash' => true]);
+                'callback_http' => 503, 'admin_pending_queue_visible' => true, 'admin_detail_http' => 200, 'no_cash' => true]);
             wp_set_current_user(0);
         }
     }
