@@ -1,4 +1,4 @@
 {
   "scope": "focused",
-  "filter": "DependencyDoubleBackedTest"
+  "filter": "ZarinpalResponseContractTest|FinancialDoubleBackedTest::test_amount_mismatch_keeps_receipt_and_reaches_the_admin_review_queue_without_cash|FinancialDoubleBackedTest::test_uncertain_transport_and_provider_results_keep_receipt_and_exact_amount_without_cash"
 }

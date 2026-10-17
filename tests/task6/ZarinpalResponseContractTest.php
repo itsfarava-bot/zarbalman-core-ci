@@ -11,12 +11,12 @@ final class ZarinpalResponseContractTest extends TestCase {
         foreach ([100, 101] as $code) {
             $cases['verified_' . $code] = [200, ['data' => ['code' => $code, 'ref_id' => '123456'], 'errors' => []], 'verified'];
         }
-        foreach ([-50, -51, -53, -54, -55] as $code) {
+        foreach ([-51, -53, -54, -55] as $code) {
             foreach (['data', 'errors'] as $envelope) {
                 $cases[$envelope . '_denied_' . abs($code)] = [200, [$envelope => ['code' => $code]], 'rejected'];
             }
         }
-        foreach ([-52, -12, -999, 0] as $code) {
+        foreach ([-50, -52, -12, -999, 0] as $code) {
             foreach (['data', 'errors'] as $envelope) {
                 $cases[$envelope . '_uncertain_' . abs($code)] = [200, [$envelope => ['code' => $code]], 'unavailable'];
             }

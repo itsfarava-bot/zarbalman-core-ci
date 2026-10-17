@@ -296,17 +296,21 @@ final class FinancialDoubleBackedTest extends TestCase {
 
     public function test_uncertain_transport_and_provider_results_keep_receipt_and_exact_amount_without_cash(): void {
         $doubles = $this->install();
-        foreach (['timeout', 'server_error', 'temporary_data_code', 'unknown_data_code'] as $mode) {
+        foreach (['timeout', 'server_error', 'temporary_data_code', 'unknown_data_code', 'invalid_json'] as $mode) {
             $fixture = new Task5FinancialFixture();
             $reply = ['status' => $mode === 'server_error' ? 500 : 200,
                 'body' => wp_json_encode(['data' => ['code' => $mode === 'temporary_data_code' ? -52 : -999], 'errors' => []], JSON_THROW_ON_ERROR),
                 'expected_body' => ['amount' => 1000, 'authority' => $fixture->authority,
                     'merchant_id' => 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL']];
             if ($mode === 'timeout') { $reply['transport_error'] = 'timeout'; }
+            if ($mode === 'invalid_json') { $reply['body'] = '{'; }
             $before = count(self::verifyCalls($doubles));
             $doubles->configure(['supporting' => true, 'callback_probe_order_id' => $fixture->orderId,
                 'responses' => ['verify.json' => $reply]]);
-            self::assertSame(503, $this->performObservedCallback('uncertain-' . $mode, $fixture, $doubles)['status']);
+            $http = $this->performObservedCallback('uncertain-' . $mode, $fixture, $doubles);
+            self::assertSame(503, $http['status']);
+            self::assertStringContainsString('نتیجهٔ پرداخت موقتاً قابل استعلام نیست؛ شناسه callback ذخیره شد و بازیابی خودکار ادامه پیدا می‌کند.',
+                html_entity_decode(strip_tags($http['body']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
             $facts = $fixture->assertNoCash();
             self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
             self::assertSame('deposit_pending', $facts['state']);
@@ -314,6 +318,38 @@ final class FinancialDoubleBackedTest extends TestCase {
             self::assertSame(1000, $calls[$before]['amount']); self::assertTrue($calls[$before]['expected_binding_matches']);
             Task5FinancialFixture::evidence('uncertain-' . $mode, ['double_backed' => true, 'http_status' => 503,
                 'receipt_retained' => true, 'exact_rial_amount' => true, 'no_cash' => true]);
+        }
+    }
+
+    public function test_amount_mismatch_keeps_receipt_and_reaches_the_admin_review_queue_without_cash(): void {
+        $doubles = $this->install();
+        foreach (['errors', 'data'] as $envelope) {
+            $fixture = new Task5FinancialFixture();
+            $doubles->configure(['supporting' => true, 'callback_probe_order_id' => $fixture->orderId,
+                'responses' => ['verify.json' => ['status' => 200,
+                    'body' => wp_json_encode([$envelope => ['code' => -50]], JSON_THROW_ON_ERROR),
+                    'expected_body' => ['amount' => 1000, 'authority' => $fixture->authority,
+                        'merchant_id' => 'TASK5-SYNTHETIC-NOT-A-PROVIDER-CREDENTIAL']]]]);
+            for ($attempt = 0; $attempt < 2; ++$attempt) {
+                $http = $this->performObservedCallback('amount-mismatch-' . $envelope . '-' . $attempt, $fixture, $doubles);
+                self::assertSame(503, $http['status']);
+                self::assertStringContainsString('نتیجهٔ پرداخت موقتاً قابل استعلام نیست؛ شناسه callback ذخیره شد و بازیابی خودکار ادامه پیدا می‌کند.',
+                    html_entity_decode(strip_tags($http['body']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $facts = $fixture->assertNoCash();
+                self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
+                self::assertSame($fixture->authority, $facts['payment'][0]['authority']);
+                self::assertSame('deposit_pending', $facts['state']);
+                self::assertTrue($fixture->request()->stockReserved());
+            }
+            $fixture->expireNatively('late_payment_review');
+            $facts = $fixture->assertNoCash();
+            self::assertSame('callback_received_on_time', $facts['payment'][0]['status']);
+            wp_set_current_user($fixture->users['admin']);
+            $rows = $fixture->repos['cases']->operationsPage('review');
+            self::assertContains($fixture->id, array_map('intval', array_column($rows, 'id')));
+            Task5FinancialFixture::evidence('amount-mismatch-' . $envelope, ['receipt_retained' => true,
+                'callback_http' => 503, 'admin_review_visible_after_expiry' => true, 'no_cash' => true]);
+            wp_set_current_user(0);
         }
     }
 
